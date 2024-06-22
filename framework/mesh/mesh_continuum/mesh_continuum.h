@@ -186,6 +186,11 @@ public:
 
   void SetOrthoAttributes(const OrthoMeshAttributes& attrs) { ortho_attributes_ = attrs; }
 
+  /**
+   * Compute volume per material id's
+   */
+  void ComputeVolumePerMaterialID() const;
+
 private:
   /// Spatial dimension
   unsigned int dim_;
