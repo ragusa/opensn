@@ -1,4 +1,4 @@
-# Multigroup Cross-section Generation Using OpenMC
+# Multigroup Cross-Section Generation Using OpenMC
 
 We provide a few Jupyter notebooks showcasing the generation of multigroup cross-section (MGXS) libraries using [OpenMC](https://docs.openmc.org/en/stable/index.html). 
 
