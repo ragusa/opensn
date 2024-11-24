@@ -196,7 +196,7 @@ AAH_FLUDSCommonData::SlotDynamics(const Cell& cell,
                             << "InitializeAlphaElements. Local Cell " << cell.local_id << " face "
                             << f << " looking for cell " << face.GetNeighborLocalID(grid)
                             << " face " << adj_face_idx << " cat: " << face_categ
-                            << " omg=" << spds.Omega().PrintS() << " lbsize=" << lock_box.size();
+                            << " omg=" << spds.Omega().PrintStr() << " lbsize=" << lock_box.size();
           Exit(EXIT_FAILURE);
         }
 

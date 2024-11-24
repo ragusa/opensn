@@ -228,7 +228,7 @@ DiscreteOrdinatesCurvilinearSolver::PerformInputChecks()
                 log.LogAllError() << "D_DO_RZ_SteadyState::SteadyStateSolver::"
                                      "PerformInputChecks : "
                                   << "mesh contains boundary faces with outward-oriented unit "
-                                  << "normal vector " << (-1 * unit_normal_vectors[d]).PrintS()
+                                  << "normal vector " << (-1 * unit_normal_vectors[d]).PrintStr()
                                   << " with vertices characterised by v(" << d << ") != 0.";
                 Exit(EXIT_FAILURE);
               }
