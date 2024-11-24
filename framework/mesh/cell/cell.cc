@@ -20,13 +20,10 @@ CellTypeName(const CellType type)
       return "GHOST";
     case CellType::SLAB:
       return "SLAB";
-      //    case CellType::SPHERICAL_SHELL:     return "SPHERICAL_SHELL";
-      //    case CellType::CYLINDRICAL_ANNULUS: return "CYLINDRICAL_ANNULUS";
     case CellType::TRIANGLE:
       return "TRIANGLE";
     case CellType::QUADRILATERAL:
       return "QUADRILATERAL";
-
     case CellType::POLYGON:
       return "POLYGON";
     case CellType::TETRAHEDRON:
@@ -39,14 +36,12 @@ CellTypeName(const CellType type)
       return "PYRAMID";
     case CellType::POLYHEDRON:
       return "POLYHEDRON";
-
     case CellType::POINT:
       return "POINT";
+    default:
+      return "NONE";
   }
-
-  return "NONE";
 }
-
 Cell::Cell(const Cell& other)
   : cell_type_(other.cell_type_),
     cell_sub_type_(other.cell_sub_type_),
@@ -250,7 +245,7 @@ CellFace::DeSerialize(const ByteArray& raw, size_t& address)
 
   CellFace face;
 
-  const size_t num_face_verts = raw.Read<size_t>(address, &address);
+  const auto num_face_verts = raw.Read<size_t>(address, &address);
   face.vertex_ids.reserve(num_face_verts);
   for (size_t fv = 0; fv < num_face_verts; ++fv)
     face.vertex_ids.push_back(raw.Read<uint64_t>(address, &address));
@@ -387,62 +382,6 @@ Cell::ToString() const
   }
 
   return outstr.str();
-}
-
-void
-Cell::RecomputeCentroidsAndNormals(const MeshContinuum& grid)
-{
-  const auto k_hat = Vector3(0, 0, 1);
-
-  centroid = Vector3(0, 0, 0);
-  for (uint64_t vid : vertex_ids)
-    centroid += grid.vertices[vid];
-  centroid /= static_cast<double>(vertex_ids.size());
-
-  for (auto& face : faces)
-  {
-    face.RecomputeCentroid(grid);
-
-    if (cell_type_ == CellType::POLYGON)
-    {
-      const auto v0 = grid.vertices[face.vertex_ids[0]];
-      const auto v1 = grid.vertices[face.vertex_ids[1]];
-
-      const auto v01 = v1 - v0;
-
-      face.normal = v01.Cross(k_hat).Normalized();
-    }
-    else if (cell_type_ == CellType::POLYHEDRON)
-    {
-      // A face of a polyhedron can itself be a polygon
-      // which can be multifaceted. Here we need the
-      // average normal over all the facets computed
-      // using an area-weighted average.
-      const size_t num_face_verts = face.vertex_ids.size();
-      double total_area = 0.0;
-      auto weighted_normal = Vector3(0, 0, 0);
-      for (size_t fv = 0; fv < num_face_verts; ++fv)
-      {
-        size_t fvp1 = (fv < (num_face_verts - 1)) ? fv + 1 : 0;
-
-        uint64_t fvid_m = face.vertex_ids[fv];
-        uint64_t fvid_p = face.vertex_ids[fvp1];
-
-        auto leg_m = grid.vertices[fvid_m] - face.centroid;
-        auto leg_p = grid.vertices[fvid_p] - face.centroid;
-
-        auto vn = leg_m.Cross(leg_p);
-
-        double area = 0.5 * vn.Norm();
-        total_area += area;
-
-        weighted_normal = weighted_normal + area * vn.Normalized();
-      }
-      weighted_normal = weighted_normal / total_area;
-
-      face.normal = weighted_normal.Normalized();
-    }
-  }
 }
 
 } // namespace opensn

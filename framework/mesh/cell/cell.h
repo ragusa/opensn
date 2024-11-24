@@ -29,7 +29,11 @@ enum class CellType
   POINT = 99
 };
 
-/// Provides the text name associated with a cell type
+/**
+ * Provides the text name associated with a cell type.
+ * @param type The CellType to translate to a string.
+ * @return A string representing the name of the cell type.
+ */
 std::string CellTypeName(CellType type);
 
 /**
@@ -52,29 +56,29 @@ public:
 
 public:
   /// Determines the neighbor's partition and whether its local or not.
-  bool IsNeighborLocal(const MeshContinuum& grid) const;
+  [[nodiscard]] bool IsNeighborLocal(const MeshContinuum& grid) const;
 
   /// Determines the neighbor's partition.
-  int GetNeighborPartitionID(const MeshContinuum& grid) const;
+  [[nodiscard]] int GetNeighborPartitionID(const MeshContinuum& grid) const;
 
   /// Determines the neighbor's local id.
-  uint64_t GetNeighborLocalID(const MeshContinuum& grid) const;
+  [[nodiscard]] uint64_t GetNeighborLocalID(const MeshContinuum& grid) const;
 
   /// Determines the neighbor's associated face.
   int GetNeighborAdjacentFaceIndex(const MeshContinuum& grid) const;
 
 public:
   /// Computes the face area.
-  double ComputeFaceArea(const MeshContinuum& grid) const;
+  [[nodiscard]] double ComputeFaceArea(const MeshContinuum& grid) const;
 
   /// Serializes a face into a vector of bytes.
-  ByteArray Serialize() const;
+  [[nodiscard]] ByteArray Serialize() const;
 
   /// Deserializes a face from a set of raw data
   static CellFace DeSerialize(const ByteArray& raw, size_t& address);
 
   /// Provides string information of the face.
-  std::string ToString() const;
+  [[nodiscard]] std::string ToString() const;
 
   /// Recomputes the face centroid assuming the mesh vertices have been transformed.
   void RecomputeCentroid(const MeshContinuum& grid);
@@ -117,23 +121,17 @@ public:
   virtual ~Cell() = default;
 
 public:
-  CellType Type() const { return cell_type_; }
-  CellType SubType() const { return cell_sub_type_; }
+  [[nodiscard]] CellType Type() const { return cell_type_; }
+  [[nodiscard]] CellType SubType() const { return cell_sub_type_; }
 
   /// Serializes a cell into a vector of bytes.
-  ByteArray Serialize() const;
+  [[nodiscard]] ByteArray Serialize() const;
 
   /// Deserializes a cell from a vector of bytes.
   static Cell DeSerialize(const ByteArray& raw, size_t& address);
 
   /// Provides string information of the cell.
-  std::string ToString() const;
-
-  /**
-   * Recomputes the cell centroid and all face centroids assuming the mesh vertices have been
-   * transformed.
-   */
-  void RecomputeCentroidsAndNormals(const MeshContinuum& grid);
+  [[nodiscard]] std::string ToString() const;
 };
 
 } // namespace opensn

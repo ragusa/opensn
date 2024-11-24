@@ -11,86 +11,87 @@ namespace opensn
 /// Stores references to global cells to enable an iterator
 class LocalCellHandler
 {
-  friend class MeshContinuum;
-
 public:
-  std::vector<std::unique_ptr<Cell>>& native_cells;
+  std::vector<std::unique_ptr<Cell>>& native_cells_;
 
 private:
   /// Constructor.
   explicit LocalCellHandler(std::vector<std::unique_ptr<Cell>>& native_cells)
-    : native_cells(native_cells)
+    : native_cells_(native_cells)
   {
   }
 
 public:
+  static LocalCellHandler Create(std::vector<std::unique_ptr<Cell>>& native_cells)
+  {
+    return LocalCellHandler(native_cells);
+  }
+
   /// Returns a reference to a local cell, given a local cell index.
   Cell& operator[](uint64_t cell_local_index);
 
   /// Returns a const reference to a local cell, given a local cell index.
   const Cell& operator[](uint64_t cell_local_index) const;
 
+  /**
+   * Get the total number of local cells.
+   * @return Size of the native cell vector.
+   */
+  [[nodiscard]] size_t LocalCellCount() const { return native_cells_.size(); }
+
   /// Internal iterator class.
   class Iterator
   {
+  private:
+    LocalCellHandler& handler_;
+    size_t index_;
+
   public:
-    LocalCellHandler& ref_block;
-    size_t ref_element;
+    Iterator(LocalCellHandler& handler, size_t index) : handler_(handler), index_(index) {}
 
-    Iterator(LocalCellHandler& block, size_t i) : ref_block(block), ref_element(i) {}
-
-    Iterator operator++()
+    Iterator& operator++()
     {
-      Iterator i = *this;
-      ref_element++;
-      return i;
-    }
-    Iterator operator++(int)
-    {
-      ref_element++;
+      ++index_;
       return *this;
     }
 
-    Cell& operator*() { return *(ref_block.native_cells[ref_element]); }
-    bool operator==(const Iterator& rhs) const { return ref_element == rhs.ref_element; }
-    bool operator!=(const Iterator& rhs) const { return ref_element != rhs.ref_element; }
+    Cell& operator*() { return *(handler_.native_cells_[index_]); }
+    bool operator==(const Iterator& other) const { return index_ == other.index_; }
+    bool operator!=(const Iterator& other) const { return index_ != other.index_; }
   };
 
   /// Internal const iterator class.
   class ConstIterator
   {
-  public:
-    const LocalCellHandler& ref_block;
-    size_t ref_element;
+  private:
+    const LocalCellHandler& handler_;
+    size_t index_;
 
-    ConstIterator(const LocalCellHandler& block, size_t i) : ref_block(block), ref_element(i) {}
+  public:
+    ConstIterator(const LocalCellHandler& handler, size_t index) : handler_(handler), index_(index)
+    {
+    }
 
     ConstIterator operator++()
     {
-      ConstIterator i = *this;
-      ref_element++;
-      return i;
-    }
-    ConstIterator operator++(int)
-    {
-      ref_element++;
+      ++index_;
       return *this;
     }
 
-    const Cell& operator*() { return *(ref_block.native_cells[ref_element]); }
-    bool operator==(const ConstIterator& rhs) const { return ref_element == rhs.ref_element; }
-    bool operator!=(const ConstIterator& rhs) const { return ref_element != rhs.ref_element; }
+    const Cell& operator*() { return *(handler_.native_cells_[index_]); }
+    bool operator==(const ConstIterator& other) const { return index_ == other.index_; }
+    bool operator!=(const ConstIterator& other) const { return index_ != other.index_; }
   };
 
   Iterator begin() { return {*this, 0}; }
 
-  Iterator end() { return {*this, native_cells.size()}; }
+  Iterator end() { return {*this, native_cells_.size()}; }
 
-  ConstIterator begin() const { return {*this, 0}; }
+  [[nodiscard]] ConstIterator begin() const { return {*this, 0}; }
 
-  ConstIterator end() const { return {*this, native_cells.size()}; }
+  [[nodiscard]] ConstIterator end() const { return {*this, native_cells_.size()}; }
 
-  size_t size() const { return native_cells.size(); }
+  [[nodiscard]] size_t size() const { return native_cells_.size(); }
 };
 
 } // namespace opensn

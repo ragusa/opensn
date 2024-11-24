@@ -59,10 +59,10 @@ public:
   unsigned int Dimension() const { return dim_; }
   void SetDimension(unsigned int dim) { dim_ = dim; }
 
-  const BoundBox& BoundingBox() const { return bound_box_; }
+  //  const BoundBox& BoundingBox() const { return bound_box_; }
   void ComputeBoundingBox();
 
-  void SetMeshOptions(const Options& opts) { mesh_options_ = opts; }
+  //  void SetMeshOptions(const Options& opts) { mesh_options_ = opts; }
   const Options& MeshOptions() const { return mesh_options_; }
 
   void SetType(MeshType type) { mesh_type_ = type; }
@@ -110,15 +110,6 @@ public:
 
   void SetOrthoAttributes(size_t nx, size_t ny, size_t nz);
   const OrthoMeshAttributes& OrthoAttributes() const { return ortho_attrs_; }
-
-  /// Makes a cell from proxy information and pushes the cell to the mesh.
-  void PushProxyCell(const std::string& type_str,
-                     const std::string& sub_type_str,
-                     int cell_num_faces,
-                     int cell_material_id,
-                     const std::vector<std::vector<uint64_t>>& proxy_faces);
-
-  void CleanUp();
 
 protected:
   /// Spatial mesh dimension

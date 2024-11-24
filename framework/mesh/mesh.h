@@ -14,38 +14,9 @@
 namespace opensn
 {
 
-struct Vector3;
-struct Matrix3x3;
-struct Face;
-struct Edge;
-struct PolyFace;
-
+// forward declarations
 class SPDS;
-
-// Cells
-class Cell;
-
-// Field function interpolation
-class FieldFunctionInterpolation;
-class FieldFunctionInterpolationLine;
-class FieldFunctionInterpolationVolume;
-
-// Meshes
-class SurfaceMesh;
-class UnpartitionedMesh;
 class MeshContinuum;
-// Logical Volumes
-class LogicalVolume;
-class SphereLogicalVolume;
-class RPPLogicalVolume;
-class RCCLogicalVolume;
-class SurfaceMeshLogicalVolume;
-class BooleanLogicalVolume;
-
-// Volume meshers
-class VolumeMesher;
-class VolumeMesherExtruder;
-class VolumeMesherPredefinedUnpartitioned;
 
 enum MeshType : int
 {
@@ -72,10 +43,13 @@ struct OrthoMeshAttributes
 
 /// Obtains the current mesh from the global stack.
 std::shared_ptr<MeshContinuum> GetCurrentMesh();
+// std::unique_ptr<MeshContinuum> GetCurrentMesh(); Why not this?
 
 } // namespace opensn
 
-#include "framework/mesh/mesh_vector.h"
-#include "framework/mesh/mesh_matrix3x3.h"
-#include "framework/mesh/mesh_face.h"
-#include "framework/mesh/mesh_edge_loops.h"
+#include "framework/mesh/mesh_vector.h"                   // For Vector3
+#include "framework/mesh/mesh_matrix3x3.h"                // For Matrix3x3
+#include "framework/mesh/mesh_face.h"                     // For Face
+#include "framework/mesh/mesh_edge_loops.h"               // For Edge
+#include "framework/mesh/cell/cell.h"                     // For Cell
+#include "framework/mesh/logical_volume/logical_volume.h" // For Cell
