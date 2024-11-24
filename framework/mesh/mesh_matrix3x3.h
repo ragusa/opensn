@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <sstream>
+#include <array>
 #include "framework/mesh/mesh_vector.h"
 
 namespace opensn

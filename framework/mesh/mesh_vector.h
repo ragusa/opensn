@@ -4,6 +4,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <iostream>
 #include <cmath>
 #include <sstream>
