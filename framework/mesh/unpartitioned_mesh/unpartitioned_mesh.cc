@@ -3,7 +3,6 @@
 
 #include "framework/mesh/unpartitioned_mesh/unpartitioned_mesh.h"
 #include "framework/mesh/cell/cell.h"
-#include "framework/mesh/mesh_continuum/grid_vtk_utils.h"
 #include "framework/runtime.h"
 #include "framework/logging/log.h"
 #include "framework/utils/timer.h"
@@ -45,7 +44,7 @@ void
 UnpartitionedMesh::ComputeCentroids()
 {
   log.Log0Verbose1() << "Computing cell-centroids.";
-  for (auto cell : raw_cells_)
+  for (auto& cell : raw_cells_)
   {
     cell->centroid = Vector3(0.0, 0.0, 0.0);
     for (auto vid : cell->vertex_ids)
@@ -62,7 +61,7 @@ UnpartitionedMesh::CheckQuality()
   log.Log0Verbose1() << "Checking cell-center-to-face orientations";
   const Vector3 khat(0.0, 0.0, 1.0);
   size_t num_negative_volume_elements = 0;
-  for (auto cell : raw_cells_)
+  for (const auto& cell : raw_cells_)
   {
     if (cell->type == CellType::POLYGON)
     {
@@ -120,7 +119,7 @@ UnpartitionedMesh::CheckQuality()
 
   log.Log0Verbose1() << "Checking face sizes";
   size_t cell_id = 0;
-  for (auto cell : raw_cells_)
+  for (const auto& cell : raw_cells_)
   {
     if (cell->type == CellType::POLYGON)
     {
@@ -352,7 +351,7 @@ UnpartitionedMesh::BuildMeshConnectivity()
     }   // for face
 
   num_bndry_faces = 0;
-  for (auto cell : raw_cells_)
+  for (const auto& cell : raw_cells_)
     for (auto& face : cell->faces)
       if (not face.has_neighbor)
         ++num_bndry_faces;

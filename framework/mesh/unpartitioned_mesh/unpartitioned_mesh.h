@@ -59,10 +59,10 @@ public:
   unsigned int Dimension() const { return dim_; }
   void SetDimension(unsigned int dim) { dim_ = dim; }
 
-  const BoundBox& BoundingBox() const { return bound_box_; }
+  //  const BoundBox& BoundingBox() const { return bound_box_; }
   void ComputeBoundingBox();
 
-  void SetMeshOptions(const Options& opts) { mesh_options_ = opts; }
+  //  void SetMeshOptions(const Options& opts) { mesh_options_ = opts; }
   const Options& MeshOptions() const { return mesh_options_; }
 
   void SetType(MeshType type) { mesh_type_ = type; }
