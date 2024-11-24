@@ -89,7 +89,7 @@ struct Matrix3x3
       val *= scalar;
     return *this;
   }
-  
+
   /// Matrix multiply with vector.
   Vector3 operator*(const Vector3& vec) const
   {
@@ -97,12 +97,8 @@ struct Matrix3x3
     std::array<double, 3> o_vec = {0.0, 0.0, 0.0};       // Output vector initialized to 0
 
     for (int i = 0; i < 3; ++i)
-    {
       for (int j = 0; j < 3; ++j)
-      {
         o_vec[i] += this->GetIJ(i, j) * i_vec[j];
-      }
-    }
 
     return Vector3(o_vec[0], o_vec[1], o_vec[2]); // Return as a Vector3
   }
@@ -120,7 +116,7 @@ struct Matrix3x3
   }
 
   /// Obtain a copy of the value at row i and column j.
-  double GetIJ(int i, int j) const
+  [[nodiscard]] double GetIJ(int i, int j) const
   {
     return vals[i * 3 + j]; // Adjusted index calculation
   }
@@ -150,7 +146,7 @@ struct Matrix3x3
   }
 
   /// Get the determinant using specified row [default:0].
-  double Det(int row = 0) const
+  [[nodiscard]] double Det(int row = 0) const
   {
     double det = 0.0;
     int sign = -1;
@@ -165,7 +161,7 @@ struct Matrix3x3
   }
 
   /// Get the minor value associated with row ir and column jr.
-  double MinorIJ(int ir, int jr) const
+  [[nodiscard]] double MinorIJ(int ir, int jr) const
   {
     std::array<double, 4> a{};
     int k = 0;
@@ -174,12 +170,10 @@ struct Matrix3x3
     {
       if (i == ir)
         continue;
-
       for (int j = 0; j < 3; ++j)
       {
         if (j == jr)
           continue;
-
         a[k++] = vals[i * 3 + j];
       }
     }
@@ -188,46 +182,35 @@ struct Matrix3x3
   }
 
   /// Compute the matrix transpose.
-  Matrix3x3 Transpose() const
+  [[nodiscard]] Matrix3x3 Transpose() const
   {
     Matrix3x3 result;
-
     for (int i = 0; i < 3; ++i)
-    {
       for (int j = 0; j < 3; ++j)
-      {
         result.vals[j * 3 + i] = vals[i * 3 + j]; // Swap row and column
-      }
-    }
 
     return result;
   }
 
   /// Compute the matrix inverse.
-  Matrix3x3 Inverse() const
+  [[nodiscard]] Matrix3x3 Inverse() const
   {
     Matrix3x3 oM;  // Matrix of minors
     Matrix3x3 oMT; // Transpose of cofactors
 
     // Compute matrix of minors
     for (int i = 0; i < 3; ++i)
-    {
       for (int j = 0; j < 3; ++j)
-      {
         oM.SetIJ(i, j, MinorIJ(i, j));
-      }
-    }
 
     // Compute matrix of cofactors
     int sign = -1;
     for (int i = 0; i < 3; ++i)
-    {
       for (int j = 0; j < 3; ++j)
       {
         sign *= -1;
         oM.SetIJ(i, j, oM.GetIJ(i, j) * sign);
       }
-    }
 
     // Compute the transpose
     oMT = oM.Transpose();
@@ -242,7 +225,7 @@ struct Matrix3x3
   }
 
   /// Print the matrix as a string.
-  std::string PrintS() const
+  [[nodiscard]] std::string PrintS() const
   {
     std::stringstream out;
     out << "[";
