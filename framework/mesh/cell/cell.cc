@@ -20,13 +20,10 @@ CellTypeName(const CellType type)
       return "GHOST";
     case CellType::SLAB:
       return "SLAB";
-      //    case CellType::SPHERICAL_SHELL:     return "SPHERICAL_SHELL";
-      //    case CellType::CYLINDRICAL_ANNULUS: return "CYLINDRICAL_ANNULUS";
     case CellType::TRIANGLE:
       return "TRIANGLE";
     case CellType::QUADRILATERAL:
       return "QUADRILATERAL";
-
     case CellType::POLYGON:
       return "POLYGON";
     case CellType::TETRAHEDRON:
@@ -39,14 +36,12 @@ CellTypeName(const CellType type)
       return "PYRAMID";
     case CellType::POLYHEDRON:
       return "POLYHEDRON";
-
     case CellType::POINT:
       return "POINT";
+    default:
+      return "NONE";
   }
-
-  return "NONE";
 }
-
 Cell::Cell(const Cell& other)
   : cell_type_(other.cell_type_),
     cell_sub_type_(other.cell_sub_type_),
@@ -250,7 +245,7 @@ CellFace::DeSerialize(const ByteArray& raw, size_t& address)
 
   CellFace face;
 
-  const size_t num_face_verts = raw.Read<size_t>(address, &address);
+  const auto num_face_verts = raw.Read<size_t>(address, &address);
   face.vertex_ids.reserve(num_face_verts);
   for (size_t fv = 0; fv < num_face_verts; ++fv)
     face.vertex_ids.push_back(raw.Read<uint64_t>(address, &address));

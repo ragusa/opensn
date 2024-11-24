@@ -283,7 +283,7 @@ DistributedMeshGenerator::SetupLocalMesh(DistributedMeshData& mesh_info)
     const auto& [cell_pid, cell_global_id] = pidgid;
     auto cell = SetupCell(raw_cell, cell_global_id, cell_pid, STLVertexListHelper(vertices));
 
-    grid_ptr->cells.push_back(std::move(cell));
+    grid_ptr->cells.PushBack(std::move(cell));
   }
 
   grid_ptr->SetDimension(mesh_info.dimension);

@@ -172,7 +172,7 @@ SurfaceMesh::UpdateInternalConnectivity()
   {
     for (int e = 0; e < 3; ++e)
     {
-      int* curface_edge = curFace.e_index[e];
+      auto& curface_edge = curFace.e_index[e];
       int vi = curface_edge[0];
       int vf = curface_edge[1];
 

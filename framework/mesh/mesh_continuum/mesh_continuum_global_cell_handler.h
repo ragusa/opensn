@@ -15,27 +15,30 @@ class GlobalCellHandler
   friend class MeshContinuum;
 
 private:
-  std::vector<std::unique_ptr<Cell>>& local_cells_ref_;
-  std::vector<std::unique_ptr<Cell>>& ghost_cells_ref_;
+  std::vector<std::unique_ptr<Cell>>& local_cells_ref_; // Reference to local cells
+  std::vector<std::unique_ptr<Cell>>& ghost_cells_ref_; // Reference to ghost cells
 
-  std::map<uint64_t, uint64_t>& global_cell_id_to_native_id_map_;
-  std::map<uint64_t, uint64_t>& global_cell_id_to_foreign_id_map_;
+  std::map<uint64_t, uint64_t>& global_to_native_map_;  // Global to local ID map
+  std::map<uint64_t, uint64_t>& global_to_foreign_map_; // Global to ghost ID map
 
 private:
   explicit GlobalCellHandler(std::vector<std::unique_ptr<Cell>>& native_cells,
                              std::vector<std::unique_ptr<Cell>>& foreign_cells,
-                             std::map<uint64_t, uint64_t>& global_cell_id_to_native_id_map,
-                             std::map<uint64_t, uint64_t>& global_cell_id_to_foreign_id_map)
+                             std::map<uint64_t, uint64_t>& global_to_native_map,
+                             std::map<uint64_t, uint64_t>& global_to_foreign_map)
     : local_cells_ref_(native_cells),
       ghost_cells_ref_(foreign_cells),
-      global_cell_id_to_native_id_map_(global_cell_id_to_native_id_map),
-      global_cell_id_to_foreign_id_map_(global_cell_id_to_foreign_id_map)
+      global_to_native_map_(global_to_native_map),
+      global_to_foreign_map_(global_to_foreign_map)
   {
   }
 
 public:
-  /// Adds a new cell to grid registry.
-  void push_back(std::unique_ptr<Cell> new_cell);
+  /**
+   * Adds a new cell to the appropriate category (local or ghost).
+   * @param new_cell The cell to add.
+   */
+  void PushBack(std::unique_ptr<Cell> new_cell);
 
   /// Returns a reference to a cell given its global cell index.
   Cell& operator[](uint64_t cell_global_index);
@@ -43,20 +46,41 @@ public:
   /// Returns a const reference to a cell given its global cell index.
   const Cell& operator[](uint64_t cell_global_index) const;
 
-  size_t GetNumGhosts() const { return global_cell_id_to_foreign_id_map_.size(); }
+  /**
+   * Access a cell by its global index.
+   * @param cell_global_index The global ID of the cell.
+   * @return Reference to the corresponding Cell object.
+   * @throws std::out_of_range If the ID is not found.
+   */
+  //  const Cell& GetCell(uint64_t cell_global_index) const;
+
+  /**
+   * Access a cell by its global index.
+   * @param cell_global_index The global ID of the cell.
+   * @return Reference to the corresponding Cell object.
+   * @throws std::out_of_range If the ID is not found.
+   */
+  //  Cell& GetCell(uint64_t cell_global_index);
+
+  [[nodiscard]] size_t GhostCellCount() const { return global_to_foreign_map_.size(); }
+  //  /**
+  //     * Get the total number of ghost cells.
+  //     * @return Size of the ghost cell vector.
+  //   */
+  //  size_t GhostCellCount() const { return ghost_cells_ref_.size(); }
 
   /**
    * Returns the cell global ids of all ghost cells. These are cells that neighbors to this
    * partition's cells but are on a different partition.
    */
-  std::vector<uint64_t> GetGhostGlobalIDs() const;
+  [[nodiscard]] std::vector<uint64_t> GetGhostGlobalIDs() const;
 
   /**
    * Returns the local storage address of a ghost cell. If the ghost is not truly a ghost then -1 is
    * returned, but is wasteful and therefore the user of this function should implement code to
    * prevent it.
    */
-  uint64_t GetGhostLocalID(uint64_t cell_global_index) const;
+  [[nodiscard]] uint64_t GetGhostLocalID(uint64_t cell_global_index) const;
 };
 
 } // namespace opensn
