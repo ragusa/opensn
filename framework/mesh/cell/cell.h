@@ -132,12 +132,6 @@ public:
 
   /// Provides string information of the cell.
   [[nodiscard]] std::string ToString() const;
-
-  /**
-   * Recomputes the cell centroid and all face centroids assuming the mesh vertices have been
-   * transformed.
-   */
-  void RecomputeCentroidsAndNormals(const MeshContinuum& grid);
 };
 
 } // namespace opensn
