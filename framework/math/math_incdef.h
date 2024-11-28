@@ -3,10 +3,9 @@
 
 #pragma once
 
-#include <math.h>
 #include <cmath>
-#include <stdio.h>
-#include <string.h>
-#include <iostream>
+#include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <iostream>
 #include <fstream>
