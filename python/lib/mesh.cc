@@ -119,8 +119,19 @@ WrapMesh(py::module& mesh)
   );
   mesh_continuum.def(
     "ComputeVolumePerBlockID",
-    &MeshContinuum::ComputeVolumePerBlockID,
-    "Compute volume per block ID."
+    [](MeshContinuum& self) {
+      std::map<int, double> cpp_map = self.ComputeVolumePerBlockID();
+      py::dict py_map;
+      for (const auto& [block_id, volume] : cpp_map)
+      {
+        py_map[py::cast(block_id)] = volume;
+      }
+      return py_map;
+    },
+    R"(
+    Compute volume per block ID and return a Python dict mapping
+    each block_id (int) to its total volume (float).
+    )"
   );
   mesh_continuum.def(
     "SetBlockIDFromFunction",
