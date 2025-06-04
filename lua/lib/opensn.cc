@@ -38,7 +38,6 @@
 #include "framework/mesh/surface_mesh/surface_mesh.h"
 #include "framework/graphs/graph_partitioner.h"
 #include "framework/graphs/kba_graph_partitioner.h"
-#include "framework/graphs/linear_graph_partitioner.h"
 #include "framework/graphs/petsc_graph_partitioner.h"
 #include "framework/field_functions/field_function.h"
 #include "framework/field_functions/field_function_grid_based.h"
@@ -352,11 +351,6 @@ static bool reg = opensnlua::Console::Bind(
       .beginClass<std::shared_ptr<KBAGraphPartitioner>>("KBAGraphPartitionerPtr")
       .endClass()
       //
-      .deriveClass<LinearGraphPartitioner, GraphPartitioner>("LinearGraphPartitioner")
-      .addStaticFunction("Create", &LinearGraphPartitioner::Create)
-      .endClass()
-      .beginClass<std::shared_ptr<LinearGraphPartitioner>>("LinearGraphPartitionerPtr")
-      .endClass()
       //
       .deriveClass<PETScGraphPartitioner, GraphPartitioner>("PETScGraphPartitioner")
       .addStaticFunction("Create", &PETScGraphPartitioner::Create)

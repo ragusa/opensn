@@ -4,7 +4,6 @@
 #include "python/lib/py_wrappers.h"
 #include "framework/graphs/graph_partitioner.h"
 #include "framework/graphs/kba_graph_partitioner.h"
-#include "framework/graphs/linear_graph_partitioner.h"
 #include "framework/graphs/petsc_graph_partitioner.h"
 #include "framework/mesh/io/mesh_io.h"
 #include "framework/mesh/logical_volume/logical_volume.h"
@@ -652,41 +651,6 @@ WrapGraphPartitioner(py::module& mesh)
     )"
   );
 
-  // linear graph partitioner
-  auto linear_graph_partitioner = py::class_<LinearGraphPartitioner,
-                                             std::shared_ptr<LinearGraphPartitioner>,
-                                             GraphPartitioner>(
-    mesh,
-    "LinearGraphPartitioner",
-    R"(
-    Basic linear partitioning.
-
-    This type of partitioner works basically only for testing.
-
-    Orthogonal meshes can produce decent partitioning but for unstructured grids it can be pretty
-    bad. It partitions cells based on their linear index ``global_id`` instead of actually
-    working with the graph.
-
-    Wrapper of :cpp:class:`opensn::LinearGraphPartitioner`.
-    )"
-  );
-  linear_graph_partitioner.def(
-    py::init(
-      [](py::kwargs & params)
-      {
-        return LinearGraphPartitioner::Create(kwargs_to_param_block(params));
-      }
-    ),
-    R"(
-    Construct a linear graph partitioner.
-
-    Parameters
-    ----------
-    all_to_rank: int, default=-1
-        Rank to which all cells are restricted if non-zero. Otherwise, the partitioner is equivalent
-        to a single-rank partitioner.
-    )"
-  );
 
   // PETSc graph partitioner
   auto petsc_graph_partitioner = py::class_<PETScGraphPartitioner,

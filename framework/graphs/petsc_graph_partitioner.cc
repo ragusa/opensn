@@ -81,8 +81,8 @@ PETScGraphPartitioner::Partition(const std::vector<std::vector<uint64_t>>& graph
     // Copy to raw arrays
     int64_t* i_indices_raw;
     int64_t* j_indices_raw;
-    PetscMalloc(i_indices.size() * sizeof(int64_t), &i_indices_raw);
-    PetscMalloc(j_indices.size() * sizeof(int64_t), &j_indices_raw);
+    PetscCall(PetscMalloc(i_indices.size() * sizeof(int64_t), &i_indices_raw));
+    PetscCall(PetscMalloc(j_indices.size() * sizeof(int64_t), &j_indices_raw));
 
     for (int64_t j = 0; j < static_cast<int64_t>(i_indices.size()); ++j)
       i_indices_raw[j] = i_indices[j];
@@ -94,35 +94,41 @@ PETScGraphPartitioner::Partition(const std::vector<std::vector<uint64_t>>& graph
 
     // Create adjacency matrix
     Mat Adj; // Adjacency matrix
-    MatCreateMPIAdj(PETSC_COMM_SELF,
-                    (int64_t)num_raw_cells,
-                    (int64_t)num_raw_cells,
-                    i_indices_raw,
-                    j_indices_raw,
-                    nullptr,
-                    &Adj);
+    PetscCall(MatCreateMPIAdj(PETSC_COMM_SELF,
+                              (int64_t)num_raw_cells,
+                              (int64_t)num_raw_cells,
+                              i_indices_raw,
+                              j_indices_raw,
+                              nullptr,
+                              &Adj));
 
     log.Log0Verbose1() << "Done creating adjacency matrix.";
 
     // Create partitioning
     MatPartitioning part;
     IS is, isg;
-    MatPartitioningCreate(MPI_COMM_SELF, &part);
-    MatPartitioningSetAdjacency(part, Adj);
-    MatPartitioningSetType(part, type_.c_str());
-    MatPartitioningSetNParts(part, number_of_parts);
-    MatPartitioningApply(part, &is);
-    MatPartitioningDestroy(&part);
-    MatDestroy(&Adj);
-    ISPartitioningToNumbering(is, &isg);
+    PetscCall(MatPartitioningCreate(MPI_COMM_SELF, &part));
+    PetscCall(MatPartitioningSetAdjacency(part, Adj));
+    PetscCall(MatPartitioningSetType(part, type_.c_str()));
+    PetscCall(MatPartitioningSetNParts(part, number_of_parts));
+    PetscCall(MatPartitioningApply(part, &is));
+    PetscCall(MatPartitioningDestroy(&part));
+    PetscCall(MatDestroy(&Adj));
+    PetscCall(ISPartitioningToNumbering(is, &isg));
     log.Log0Verbose1() << "Done building paritioned index set.";
 
     // Get cell global indices
     const int64_t* cell_pids_raw;
-    ISGetIndices(is, &cell_pids_raw);
+    PetscCall(ISGetIndices(is, &cell_pids_raw));
     for (size_t i = 0; i < num_raw_cells; ++i)
       cell_pids[i] = cell_pids_raw[i];
-    ISRestoreIndices(is, &cell_pids_raw);
+    PetscCall(ISRestoreIndices(is, &cell_pids_raw));
+
+    PetscCall(ISDestroy(&is));
+    PetscCall(ISDestroy(&isg));
+
+    PetscCall(PetscFree(i_indices_raw));
+    PetscCall(PetscFree(j_indices_raw));
 
     log.Log0Verbose1() << "Done retrieving cell global indices.";
   } // if more than 1 cell

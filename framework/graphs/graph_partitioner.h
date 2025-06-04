@@ -18,6 +18,8 @@ public:
                                          const std::vector<Vector3>& centroids,
                                          int number_of_parts) = 0;
 
+  virtual ~GraphPartitioner() = default;
+
 protected:
   static InputParameters GetInputParameters();
   explicit GraphPartitioner(const InputParameters& params);

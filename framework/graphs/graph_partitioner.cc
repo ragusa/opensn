@@ -18,4 +18,6 @@ GraphPartitioner::GraphPartitioner(const InputParameters& params) : Object(param
 {
 }
 
+GraphPartitioner::~GraphPartitioner() = default;
+
 } // namespace opensn

@@ -7,6 +7,7 @@
 #include "framework/runtime.h"
 #include "framework/logging/log.h"
 #include <cmath>
+#include <algorithm>
 
 namespace opensn
 {
@@ -66,7 +67,7 @@ KBAGraphPartitioner::KBAGraphPartitioner(const InputParameters& params)
     if (cuts.empty())
       continue;
 
-    // Check monitonically increasing
+    // Check monotonically increasing
     {
       double prev_value = 0.0;
       for (const double cut_value : *cuts_ptr)
@@ -77,7 +78,7 @@ KBAGraphPartitioner::KBAGraphPartitioner(const InputParameters& params)
         prev_value = cut_value;
       }
     } // for cut value
-  }   // for each coordinate
+  } // for each coordinate
 }
 
 std::vector<int64_t>
@@ -129,14 +130,17 @@ KBAGraphPartitioner::Partition(const std::vector<std::vector<uint64_t>>& graph,
 
   const auto pid_subsets = MakeSubSets(nx_ * ny_ * nz_, number_of_parts);
 
+  std::vector<size_t> boundaries;
+  boundaries.reserve(number_of_parts + 1);
+  for (const auto& ss : pid_subsets)
+    boundaries.push_back(ss.ss_begin);
+  boundaries.push_back(pid_subsets.back().ss_end + 1);
+
   std::vector<int64_t> real_pids(num_cells, 0);
   for (size_t c = 0; c < num_cells; ++c)
   {
-    for (size_t p = 0; p < number_of_parts; ++p)
-    {
-      if (pids[c] >= pid_subsets[p].ss_begin and pids[c] <= pid_subsets[p].ss_end)
-        real_pids[c] = static_cast<int64_t>(p);
-    }
+    auto it = std::upper_bound(boundaries.begin(), boundaries.end(), static_cast<size_t>(pids[c]));
+    real_pids[c] = static_cast<int64_t>(std::distance(boundaries.begin(), it) - 1);
   }
 
   log.Log0Verbose1() << "Done partitioning with KBAGraphPartitioner";
