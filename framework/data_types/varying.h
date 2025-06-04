@@ -12,6 +12,11 @@
 #include <vector>
 #include <memory>
 
+/**
+ * \file
+ * Implements the Varying class, a type-erased container capable of
+ * holding strings, numbers, and user data.
+ */
 namespace opensn
 {
 

@@ -10,6 +10,11 @@
 #include <algorithm>
 #include <sstream>
 
+/**
+ * \file
+ * Utilities for expressing allowable value ranges used by BasicOptions
+ * and other validation mechanisms.
+ */
 namespace opensn
 {
 

@@ -15,6 +15,11 @@
 #include <vector>
 #include <string>
 
+/**
+ * \file
+ * Lightweight multidimensional array supporting bounds checking and
+ * value initialization utilities.
+ */
 namespace opensn
 {
 

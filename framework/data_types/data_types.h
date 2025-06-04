@@ -5,6 +5,11 @@
 
 #include <string>
 
+/**
+ * \file
+ * Enumerations and helper utilities describing data types that can be
+ * stored inside a Varying object.
+ */
 namespace opensn
 {
 

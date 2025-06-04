@@ -5,6 +5,10 @@
 
 #include "framework/data_types/varying.h"
 
+/**
+ * \file
+ * Defines light-weight containers for storing named configuration values.
+ */
 namespace opensn
 {
 

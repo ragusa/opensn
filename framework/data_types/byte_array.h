@@ -9,6 +9,10 @@
 #include <cstring>
 #include <cstddef>
 
+/**
+ * \file
+ * Container providing utilities for reading and writing raw bytes.
+ */
 namespace opensn
 {
 
