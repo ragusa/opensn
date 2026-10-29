@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Infinite-medium invariant on pyramid cells (exodus asset fuel_pyramid.e, box-shaped, reflecting
+on all six boundaries), sigma_t = 1, c = 0.5, uniform isotropic source q = 1, so phi = 2 exactly
+for PWQD and PWLD. Exercises PWQD on pyramids (non-simple vertices for pyramids).
+SDM: PWLD and PWQD; AAH or CBC sweeps (PWQD_SWEEP_TYPE).
+"""
+
+import os
+import sys
+
+if "opensn_console" not in globals():
+    from mpi4py import MPI
+    size = MPI.COMM_WORLD.size
+    rank = MPI.COMM_WORLD.rank
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../")))
+    from pyopensn.mesh import FromFileMeshGenerator
+    from pyopensn.xs import MultiGroupXS
+    from pyopensn.source import VolumetricSource
+    from pyopensn.aquad import GLCProductQuadrature3DXYZ
+    from pyopensn.solver import DiscreteOrdinatesProblem, SteadyStateSourceSolver
+    from pyopensn.fieldfunc import FieldFunctionInterpolationVolume
+    from pyopensn.logvol import RPPLogicalVolume
+
+if __name__ == "__main__":
+
+    sweep_type = os.environ.get("PWQD_SWEEP_TYPE", "AAH")
+
+    grid = FromFileMeshGenerator(filename="../../../../assets/mesh/fuel_pyramid.e").Execute()
+    grid.SetOrthogonalBoundaries()
+    grid.SetUniformBlockID(0)
+
+    xs = MultiGroupXS()
+    xs.CreateSimpleOneGroup(sigma_t=1.0, c=0.5)
+    src = VolumetricSource(block_ids=[0], group_strength=[1.0])
+    pquad = GLCProductQuadrature3DXYZ(n_polar=2, n_azimuthal=4, scattering_order=0)
+
+    results = {}
+    for sdm in ("pwld", "pwqd"):
+        phys = DiscreteOrdinatesProblem(
+            mesh=grid,
+            num_groups=1,
+            groupsets=[
+                {
+                    "groups_from_to": (0, 0),
+                    "angular_quadrature": pquad,
+                    "inner_linear_method": "petsc_gmres",
+                    "l_abs_tol": 1.0e-12,
+                    "l_max_its": 500,
+                    "gmres_restart_interval": 50,
+                }
+            ],
+            xs_map=[{"block_ids": [0], "xs": xs}],
+            volumetric_sources=[src],
+            boundary_conditions=[
+                {"name": n, "type": "reflecting"}
+                for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
+            ],
+            spatial_discretization=sdm,
+            sweep_type=sweep_type,
+        )
+        solver = SteadyStateSourceSolver(problem=phys)
+        solver.Initialize()
+        solver.Execute()
+
+        ff = phys.GetScalarFluxFieldFunction()[0]
+        whole = RPPLogicalVolume(infx=True, infy=True, infz=True)
+        vals = {}
+        for op in ("max", "avg"):
+            ffi = FieldFunctionInterpolationVolume()
+            ffi.SetOperationType(op)
+            ffi.SetLogicalVolume(whole)
+            ffi.SetFieldFunction(ff)
+            ffi.Execute()
+            vals[op] = ffi.GetValue()
+        results[sdm] = vals
+
+    if rank == 0:
+        for sdm in ("pwld", "pwqd"):
+            print(f"Max-value-{sdm}={results[sdm]['max']:.10f}")
+            print(f"Avg-value-{sdm}={results[sdm]['avg']:.10f}")

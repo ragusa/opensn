@@ -87,3 +87,7 @@ doc/source/tutorials/**/.ipynb_checkpoints/
 !test/assets/mesh/pwqd_hex_sheared_2.vtu
 !test/assets/mesh/pwqd_hex_perturbed_2.vtu
 !test/assets/mesh/pwqd_tets_2.vtu
+!test/assets/mesh/pwqd_unit_cube_tets_4.vtu
+!test/assets/mesh/pwqd_unit_cube_tets_8.vtu
+!test/assets/mesh/pwqd_unit_cube_perturbed_4.vtu
+!test/assets/mesh/pwqd_unit_cube_perturbed_8.vtu

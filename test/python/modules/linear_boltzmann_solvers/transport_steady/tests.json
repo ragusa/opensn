@@ -2467,5 +2467,417 @@
         "abs_tol": 0.4
       }
     ]
+  },
+  {
+    "file": "transport_3d_pwqd_pyramids_infinite_medium.py",
+    "comment": "Infinite-medium invariant on pyramids (exodus asset) for PWQD and PWLD, reflecting (AAH sweeps)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_pyramids_infinite_medium_aah_np1"
+  },
+  {
+    "file": "transport_3d_pwqd_pyramids_infinite_medium.py",
+    "comment": "Infinite-medium invariant on pyramids (exodus asset) for PWQD and PWLD, reflecting (CBC sweeps)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_pyramids_infinite_medium_cbc_np1",
+    "env": {
+      "PWQD_SWEEP_TYPE": "CBC"
+    }
+  },
+  {
+    "file": "transport_3d_pwqd_pyramids_infinite_medium.py",
+    "comment": "Infinite-medium invariant on pyramids (exodus asset) for PWQD and PWLD, reflecting (AAH sweeps)",
+    "num_procs": 2,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_pyramids_infinite_medium_aah_np2"
+  },
+  {
+    "file": "transport_3d_pwqd_pyramids_infinite_medium.py",
+    "comment": "Infinite-medium invariant on pyramids (exodus asset) for PWQD and PWLD, reflecting (CBC sweeps)",
+    "num_procs": 2,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_pyramids_infinite_medium_cbc_np2",
+    "env": {
+      "PWQD_SWEEP_TYPE": "CBC"
+    }
+  },
+  {
+    "file": "transport_3d_pwqd_wedges_infinite_medium.py",
+    "comment": "Infinite-medium invariant on wedges (exodus asset) for PWQD and PWLD, reflecting (AAH sweeps)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_wedges_infinite_medium_aah_np1"
+  },
+  {
+    "file": "transport_3d_pwqd_wedges_infinite_medium.py",
+    "comment": "Infinite-medium invariant on wedges (exodus asset) for PWQD and PWLD, reflecting (CBC sweeps)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_wedges_infinite_medium_cbc_np1",
+    "env": {
+      "PWQD_SWEEP_TYPE": "CBC"
+    }
+  },
+  {
+    "file": "transport_3d_pwqd_wedges_infinite_medium.py",
+    "comment": "Infinite-medium invariant on wedges (exodus asset) for PWQD and PWLD, reflecting (AAH sweeps)",
+    "num_procs": 2,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_wedges_infinite_medium_aah_np2"
+  },
+  {
+    "file": "transport_3d_pwqd_wedges_infinite_medium.py",
+    "comment": "Infinite-medium invariant on wedges (exodus asset) for PWQD and PWLD, reflecting (CBC sweeps)",
+    "num_procs": 2,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_wedges_infinite_medium_cbc_np2",
+    "env": {
+      "PWQD_SWEEP_TYPE": "CBC"
+    }
+  },
+  {
+    "file": "transport_3d_pwqd_mg_dsa.py",
+    "comment": "168-group graphite/air block with WGDSA and TGDSA for PWQD and PWLD (convergence of both groupsets with each basis; the PWQD peak values are a regression baseline from the first run, 2026-10-28, not an independent reference)",
+    "num_procs": 4,
+    "weight_class": "intermediate",
+    "checks": [
+      {
+        "type": "StrCompare",
+        "key": "WGS groups [0-62] iteration =",
+        "wordnum": 18,
+        "gold": "converged"
+      },
+      {
+        "type": "StrCompare",
+        "key": "WGS groups [63-167] iteration =",
+        "wordnum": 18,
+        "gold": "converged"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-g39-pwld=",
+        "goldvalue": 0.05183448,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-g120-pwld=",
+        "goldvalue": 0.001548104,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-g39-pwqd=",
+        "goldvalue": 0.0471642,
+        "rel_tol": 0.0001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-g120-pwqd=",
+        "goldvalue": 0.001776689,
+        "rel_tol": 0.0001
+      }
+    ]
+  },
+  {
+    "file": "transport_3d_pwqd_self_convergence.py",
+    "comment": "Spatial convergence at finite thickness with a smooth source: PWQD third order (cell averages superconverge at ~4), PWLD second order, against nested 32^3 PWQD / 64^3 PWLD references that must agree with each other",
+    "num_procs": 4,
+    "weight_class": "long",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RefCrossCheck-pwqd32-vs-pwld64=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0005
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-4-8=",
+        "goldvalue": 3.9,
+        "abs_tol": 0.6
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-8-16=",
+        "goldvalue": 3.9,
+        "abs_tol": 0.6
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-8-16=",
+        "goldvalue": 2.1,
+        "abs_tol": 0.3
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-16-32=",
+        "goldvalue": 2.06,
+        "abs_tol": 0.3
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2Err-pwqd-16=",
+        "goldvalue": 3.76e-05,
+        "abs_tol": 2e-05
+      }
+    ]
+  },
+  {
+    "file": "transport_3d_pwqd_thick_limit_unstructured.py",
+    "comment": "Thick diffusion limit on Kuhn tets, interior-perturbed hexes (non-planar faces) and extruded prisms for PWQD and PWLD vs the analytic limit (vertex RMS/max errors; orders between refinements); one rank with a direct DSA solve, see the docstring",
+    "num_procs": 1,
+    "weight_class": "intermediate",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RelRmsVertexErr-pwqd-tets-8=",
+        "goldvalue": 0.000372,
+        "abs_tol": 0.0002
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelRmsVertexErr-pwqd-perturbed-8=",
+        "goldvalue": 0.00242,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelRmsVertexErr-pwqd-prisms-2=",
+        "goldvalue": 0.00185,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-tets=",
+        "goldvalue": 2.32,
+        "abs_tol": 0.4
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-perturbed=",
+        "goldvalue": 2.39,
+        "abs_tol": 0.4
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelRmsVertexErr-pwld-tets-8=",
+        "goldvalue": 0.00727,
+        "abs_tol": 0.002
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-tets=",
+        "goldvalue": 1.61,
+        "abs_tol": 0.4
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-perturbed=",
+        "goldvalue": 1.78,
+        "abs_tol": 0.4
+      }
+    ]
   }
 ]
