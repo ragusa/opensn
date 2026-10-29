@@ -55,6 +55,8 @@ DiscreteOrdinatesCurvilinearProblem::CheckConfigurationErrors(
                         ". Only TWOD_CYLINDRICAL and ONED_SPHERICAL geometry types are supported.");
   if (sweep_type_ != "AAH")
     errors.emplace_back("Curvilinear geometries support only sweep_type=\"AAH\".");
+  if (spatial_discretization_type_ != "pwld")
+    errors.emplace_back("Curvilinear geometries support only spatial_discretization=\"pwld\".");
   if (use_gpus_)
     errors.emplace_back("GPU acceleration is not supported for curvilinear geometries yet.");
 
@@ -152,9 +154,6 @@ DiscreteOrdinatesCurvilinearProblem::InitializeSpatialDiscretization()
                        GetName() + ": unsupported geometry " +
                          std::string(ToString(geometry_type_)) + ".");
 
-  OpenSnLogicalErrorIf(spatial_discretization_type_ != "pwld",
-                       GetName() + ": curvilinear problems support only spatial_discretization="
-                                   "\"pwld\".");
   discretization_ = PieceWiseLinearDiscontinuous::New(grid_, quad_order);
   ComputeUnitIntegrals();
   ComputeSecondaryUnitIntegrals();

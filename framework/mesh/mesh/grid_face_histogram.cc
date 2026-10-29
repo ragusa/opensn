@@ -16,6 +16,10 @@ GridFaceHistogram::Build(std::vector<size_t> face_sizes,
                          double slave_tolerance)
 {
   std::vector<std::pair<size_t, size_t>> face_categories_list;
+  // A rank without local cells gets a single empty bin
+  if (face_sizes.empty())
+    return std::make_shared<GridFaceHistogram>(
+      std::vector<std::pair<size_t, size_t>>{std::make_pair<size_t, size_t>(0, 0)});
   std::vector<size_t>& face_size_histogram = face_sizes;
   std::stable_sort(face_size_histogram.begin(), face_size_histogram.end());
 

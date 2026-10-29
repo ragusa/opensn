@@ -299,7 +299,9 @@ QuadraticMapping(const SpatialDiscretization& sdm, const Cell& cell)
 
 /// The side-tetrahedron sub-mesh of all local cells as VTK quadratic tetrahedra.
 vtkNew<vtkUnstructuredGrid>
-PrepareVtkQuadraticSubmeshGrid(const Mesh& grid, const SpatialDiscretization& sdm)
+PrepareVtkQuadraticSubmeshGrid(const Mesh& grid,
+                               const SpatialDiscretization& sdm,
+                               const std::array<size_t, 10>& order)
 {
   vtkNew<vtkUnstructuredGrid> ugrid;
   vtkNew<vtkPoints> points;
@@ -312,9 +314,7 @@ PrepareVtkQuadraticSubmeshGrid(const Mesh& grid, const SpatialDiscretization& sd
   vtkIdType node_counter = 0;
   for (const auto& cell : grid.GetLocalCells())
   {
-    const auto& mapping = QuadraticMapping(sdm, *cell);
-    const auto& tying = mapping.GetTying();
-    const auto order = VtkQuadraticTetraNodeOrder(tying.GetReferenceElement());
+    const auto& tying = QuadraticMapping(sdm, *cell).GetTying();
     const auto& X = tying.GetSubNodeLocations();
     for (size_t s = 0; s < tying.GetNumSides(); ++s)
     {
@@ -373,8 +373,11 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
           SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS)
         throw std::logic_error(fname + ": Cannot mix quadratic and non-quadratic field functions.");
 
-  auto ugrid = quadratic ? PrepareVtkQuadraticSubmeshGrid(*grid, *master_ff.discretization_)
-                         : PrepareVtkUnstructuredGrid(grid);
+  // VTK node order of the P2 reference tetrahedron (the same for every PWQD cell)
+  const auto vtk_order = VtkQuadraticTetraNodeOrder(TetLagrangeReference(2));
+  auto ugrid = quadratic
+                 ? PrepareVtkQuadraticSubmeshGrid(*grid, *master_ff.discretization_, vtk_order)
+                 : PrepareVtkUnstructuredGrid(grid);
 
   // Upload cell/point data
   auto* point_data = ugrid->GetPointData();
@@ -405,10 +408,10 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
         if (quadratic)
         {
           // Values at the sub-mesh nodes: T times the cell's nodal values
-          const auto& mapping = QuadraticMapping(*sdm, *cell);
-          const auto& tying = mapping.GetTying();
+          const auto& tying = QuadraticMapping(*sdm, *cell).GetTying();
           const auto& T = tying.GetTyingOperator();
-          const auto order = VtkQuadraticTetraNodeOrder(tying.GetReferenceElement());
+          if (tying.GetDegree() != 2)
+            throw std::logic_error(fname + ": quadratic export expects degree-2 cell mappings.");
           std::vector<double> nodal(num_nodes, 0.0);
           for (size_t n = 0; n < num_nodes; ++n)
             nodal[n] = field_vector[sdm->MapDOFLocal(*cell, n, uk_man, 0, c)];
@@ -420,7 +423,7 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
           {
             const auto& side_nodes = tying.GetSideNodes(s);
             for (size_t k = 0; k < 10; ++k)
-              point_array->InsertNextValue(sub[side_nodes[order[k]]]);
+              point_array->InsertNextValue(sub[side_nodes[vtk_order[k]]]);
           }
           continue;
         }

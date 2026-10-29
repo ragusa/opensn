@@ -33,9 +33,9 @@ AAH_FLUDSCommonData::AAH_FLUDSCommonData(
   const SPDS& spds,
   const GridFaceHistogram& grid_face_histogram,
   const SpatialDiscretization& sdm)
-  : FLUDSCommonData(spds, grid_nodal_mappings), sdm_(sdm)
+  : FLUDSCommonData(spds, grid_nodal_mappings)
 {
-  this->InitializeAlphaElements(spds, grid_face_histogram);
+  this->InitializeAlphaElements(spds, grid_face_histogram, sdm);
 }
 
 void
@@ -49,7 +49,8 @@ AAH_FLUDSCommonData::FinalizeBeta(const SPDS& spds)
 
 void
 AAH_FLUDSCommonData::InitializeAlphaElements(const SPDS& spds,
-                                             const GridFaceHistogram& grid_face_histogram)
+                                             const GridFaceHistogram& grid_face_histogram,
+                                             const SpatialDiscretization& sdm)
 {
 
   const auto grid = spds.GetGrid();
@@ -92,7 +93,7 @@ AAH_FLUDSCommonData::InitializeAlphaElements(const SPDS& spds,
 
     local_so_cell_mapping[cell.local_id] = csoi; // Set mapping
 
-    SlotDynamics(cell, spds, grid_face_histogram, lock_boxes, delayed_lock_box);
+    SlotDynamics(cell, spds, grid_face_histogram, sdm, lock_boxes, delayed_lock_box);
 
   } // for csoi
 
@@ -140,6 +141,7 @@ AAH_FLUDSCommonData::SlotDynamics(
   const Cell& cell,
   const SPDS& spds,
   const GridFaceHistogram& grid_face_histogram,
+  const SpatialDiscretization& sdm,
   std::vector<std::vector<std::pair<std::optional<uint64_t>, short>>>& lock_boxes,
   std::vector<std::pair<std::optional<uint64_t>, short>>& delayed_lock_box)
 {
@@ -165,7 +167,7 @@ AAH_FLUDSCommonData::SlotDynamics(
   };
 
   const auto cell_id = cell.local_id;
-  const auto& cell_mapping = sdm_.GetCellMapping(cell);
+  const auto& cell_mapping = sdm.GetCellMapping(cell);
 
   // Incoming faces
   std::vector<short> inco_face_face_category;

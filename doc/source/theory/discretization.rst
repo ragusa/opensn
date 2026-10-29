@@ -434,8 +434,8 @@ employed.
   is scaled by :math:`p(p+1)/2` and the penalty length uses the
   face-dependent orthogonal projection of
   :cite:t:`turcksin2014discontinuous`. In this version PWQD is available
-  for 3D polyhedral meshes with AAH sweeps on CPUs, for steady-state
-  source and eigenvalue problems.
+  for 3D polyhedral meshes with AAH or CBC sweeps on CPUs, for
+  steady-state source and eigenvalue problems.
 
 
 References

@@ -2142,7 +2142,7 @@
   },
   {
     "file": "transport_3d_pwqd_infinite_medium.py",
-    "comment": "3D infinite-medium invariant (phi = q/sigma_a = 2) for PWQD and PWLD, reflecting box, AAH (CBC sweeps)",
+    "comment": "3D infinite-medium invariant (phi = q/sigma_a = 2) for PWQD and PWLD, reflecting box (CBC sweeps)",
     "num_procs": 1,
     "checks": [
       {
@@ -2229,7 +2229,7 @@
   },
   {
     "file": "transport_3d_pwqd_infinite_medium.py",
-    "comment": "3D infinite-medium invariant (phi = q/sigma_a = 2) for PWQD and PWLD, reflecting box, AAH (CBC sweeps)",
+    "comment": "3D infinite-medium invariant (phi = q/sigma_a = 2) for PWQD and PWLD, reflecting box (CBC sweeps)",
     "num_procs": 4,
     "checks": [
       {

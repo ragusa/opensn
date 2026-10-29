@@ -77,8 +77,6 @@ public:
 
 protected:
   friend class AAH_FLUDS;
-  /// Discretization providing the per-face node counts.
-  const SpatialDiscretization& sdm_;
   size_t largest_face_ = 0;
   /// Number of face categories
   size_t num_face_categories_ = 0;
@@ -145,11 +143,14 @@ protected:
    * struct.upwind_dof_mapping is a mapping of each of this face's dofs to the upwinded face's dofs
    */
 private:
-  void InitializeAlphaElements(const SPDS& spds, const GridFaceHistogram& grid_face_histogram);
+  void InitializeAlphaElements(const SPDS& spds,
+                               const GridFaceHistogram& grid_face_histogram,
+                               const SpatialDiscretization& sdm);
 
   void SlotDynamics(const Cell& cell,
                     const SPDS& spds,
                     const GridFaceHistogram& grid_face_histogram,
+                    const SpatialDiscretization& sdm,
                     std::vector<std::vector<std::pair<std::optional<uint64_t>, short>>>& lock_boxes,
                     std::vector<std::pair<std::optional<uint64_t>, short>>& delayed_lock_box);
 

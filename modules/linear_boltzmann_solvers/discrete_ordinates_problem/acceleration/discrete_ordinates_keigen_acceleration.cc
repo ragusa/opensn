@@ -140,6 +140,9 @@ DiscreteOrdinatesKEigenAcceleration::NodallyAveragedPWLDVector(const std::vector
   const auto& pwld_sdm = do_problem_.GetSpatialDiscretization();
   const auto& pwlc_sdm = diffusion_solver_->GetSpatialDiscretization();
   const auto& uk_man = do_problem_.GetUnknownManager();
+  // The projection pairs PWLD node i with cell vertex i
+  if (pwld_sdm.GetType() != SpatialDiscretizationType::PIECEWISE_LINEAR_DISCONTINUOUS)
+    throw std::logic_error("NodallyAveragedPWLDVector requires a PWLD transport discretization");
 
   const auto& vgc = ghost_info_.vector_ghost_communicator;
   const auto& dfem_dof_global2local_map = ghost_info_.ghost_global_id_2_local_map;

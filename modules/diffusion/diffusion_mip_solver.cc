@@ -1248,7 +1248,12 @@ DiffusionMIPSolver::HPerpendicular(const Cell& cell, unsigned int f)
   {
     const auto surface_area = ComputeSurfaceArea();
 
-    if (options.h_perp_convention == "face")
+    std::string convention = options.h_perp_convention;
+    if (convention == "auto")
+      convention = (sdm_.GetType() == SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS)
+                     ? "face"
+                     : "cell";
+    if (convention == "face")
     {
       // Face-dependent orthogonal projections (Turcksin & Ragusa 2014; Hackemack 2016)
       if (num_faces == 4) // Tet: height of the pyramid over face f
@@ -1258,7 +1263,7 @@ DiffusionMIPSolver::HPerpendicular(const Cell& cell, unsigned int f)
       else // Polyhedron: diameter of the sphere with the same V/S
         hp = 6 * volume / surface_area;
     }
-    else if (options.h_perp_convention == "cell")
+    else if (convention == "cell")
     {
       if (num_faces == 4) // Tet
         hp = 3 * volume / surface_area;
@@ -1270,7 +1275,8 @@ DiffusionMIPSolver::HPerpendicular(const Cell& cell, unsigned int f)
     else
       throw std::invalid_argument("acceleration::DiffusionMIPSolver::HPerpendicular: unknown "
                                   "h_perp_convention \"" +
-                                  options.h_perp_convention + "\" (expected \"cell\" or \"face\")");
+                                  options.h_perp_convention +
+                                  "\" (expected \"auto\", \"cell\" or \"face\")");
   } // Polyhedron
   else
     throw std::logic_error("acceleration::DiffusionMIPSolver::HPerpendicular: "

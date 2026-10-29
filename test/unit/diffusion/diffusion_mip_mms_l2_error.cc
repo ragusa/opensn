@@ -31,22 +31,34 @@ namespace
 
 // Manufactured solution: phi = cos(pi x) + cos(pi y) [+ cos(pi z) in 3D], D = 1, sigma_r = 0,
 // so q = -div(D grad phi) = pi^2 phi.
-bool mms_3d = false;
-
 double
-MMS_phi(const Vector3& pt)
+MMS_phi_2d(const Vector3& pt)
 {
-  return std::cos(M_PI * pt.x) + std::cos(M_PI * pt.y) + (mms_3d ? std::cos(M_PI * pt.z) : 0.0);
+  return std::cos(M_PI * pt.x) + std::cos(M_PI * pt.y);
 }
 
 double
-MMS_q(const Vector3& pt)
+MMS_q_2d(const Vector3& pt)
 {
-  return M_PI * M_PI * MMS_phi(pt);
+  return M_PI * M_PI * MMS_phi_2d(pt);
+}
+
+double
+MMS_phi_3d(const Vector3& pt)
+{
+  return std::cos(M_PI * pt.x) + std::cos(M_PI * pt.y) + std::cos(M_PI * pt.z);
+}
+
+double
+MMS_q_3d(const Vector3& pt)
+{
+  return M_PI * M_PI * MMS_phi_3d(pt);
 }
 
 std::pair<double, double>
-SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid, const std::string& sdm_type = "PWLD")
+SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid,
+                       const std::string& sdm_type = "PWLD",
+                       bool three_d = false)
 {
   using MatID2XSMap = std::map<unsigned int, Multigroup_D_and_sigR>;
 
@@ -83,8 +95,8 @@ SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid, const std::string& sdm_type =
     unit_cell_matrices[cell->local_id] = ComputeUnitCellIntegrals(sdm, *cell);
   }
 
-  ScalarSpatialFunction mms_phi = MMS_phi;
-  ScalarSpatialFunction mms_q = MMS_q;
+  ScalarSpatialFunction mms_phi = three_d ? MMS_phi_3d : MMS_phi_2d;
+  ScalarSpatialFunction mms_q = three_d ? MMS_q_3d : MMS_q_2d;
 
   DiffusionMIPSolver solver("SimTest_IP_MMS_L2error",
                             sdm,
@@ -97,8 +109,6 @@ SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid, const std::string& sdm_type =
   solver.options.verbose = true;
   solver.options.residual_tolerance = 1.0e-10;
   solver.options.perform_symmetry_check = true;
-  if (sdm_type == "PWQD")
-    solver.options.h_perp_convention = "face";
   solver.SetReferenceSolutionFunction(mms_phi);
   solver.SetSourceFunction(mms_q);
   solver.Initialize();
@@ -205,7 +215,6 @@ TEST(DiffusionMIP, MMSL2ConvergencePWQD3D)
   if (opensn::mpi_comm.size() != 1)
     return;
 
-  mms_3d = true;
   const std::array<unsigned int, 3> refinements = {2, 4, 8};
   const double length = 2.0;
 
@@ -217,11 +226,11 @@ TEST(DiffusionMIP, MMSL2ConvergencePWQD3D)
       grid->SetUniformBlockID(0);
       grid->SetOrthogonalBoundaries();
 
-      const auto [full_assembly_error, rhs_assembly_error] = SimTest_IP_MMS_L2error(grid, sdm_type);
+      const auto [full_assembly_error, rhs_assembly_error] =
+        SimTest_IP_MMS_L2error(grid, sdm_type, true);
       errors[sdm_type].push_back(full_assembly_error);
       EXPECT_NEAR(rhs_assembly_error, full_assembly_error, 1.0e-12);
     }
-  mms_3d = false;
 
   // Two cells per side are pre-asymptotic for a cosine (PWLD rate 0.13 on 2^3 -> 4^3), so the
   // rate is checked on the finest pair; monotone decrease is required everywhere.
