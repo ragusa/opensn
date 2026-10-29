@@ -2930,5 +2930,118 @@
       }
     ],
     "outfileprefix": "transport_3d_mms_angular_source_4"
+  },
+  {
+    "file": "transport_3d_pwqd_mms.py",
+    "comment": "Manufactured solutions for PWQD: quadratic patch tests exact on hexes and tets, linear on non-planar perturbed hexes; sine MMS third order on hexes and tets (PWLD second order as control)",
+    "num_procs": 1,
+    "weight_class": "intermediate",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-hexes=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-tets=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-perturbed=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-hex4-hex8=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-hex8-hex16=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-tet4-tet8=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-hex8-hex16=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.2
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-tet4-tet8=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.3
+      }
+    ]
+  },
+  {
+    "file": "transport_3d_pwqd_mms.py",
+    "comment": "Manufactured solutions for PWQD: quadratic patch tests exact on hexes and tets, linear on non-planar perturbed hexes; sine MMS third order on hexes and tets (PWLD second order as control)",
+    "num_procs": 4,
+    "weight_class": "intermediate",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-hexes=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-tets=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-perturbed=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-hex4-hex8=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-hex8-hex16=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-tet4-tet8=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-hex8-hex16=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.2
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-tet4-tet8=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.3
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_mms_4"
   }
 ]
