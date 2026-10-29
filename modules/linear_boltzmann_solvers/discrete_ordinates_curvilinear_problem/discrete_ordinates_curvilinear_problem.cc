@@ -152,6 +152,9 @@ DiscreteOrdinatesCurvilinearProblem::InitializeSpatialDiscretization()
                        GetName() + ": unsupported geometry " +
                          std::string(ToString(geometry_type_)) + ".");
 
+  OpenSnLogicalErrorIf(spatial_discretization_type_ != "pwld",
+                       GetName() + ": curvilinear problems support only spatial_discretization="
+                                   "\"pwld\".");
   discretization_ = PieceWiseLinearDiscontinuous::New(grid_, quad_order);
   ComputeUnitIntegrals();
   ComputeSecondaryUnitIntegrals();

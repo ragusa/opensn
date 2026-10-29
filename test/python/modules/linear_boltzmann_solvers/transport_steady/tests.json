@@ -1986,5 +1986,158 @@
         "abs_tol": 1e-12
       }
     ]
+  },
+  {
+    "file": "transport_3d_pwqd_infinite_medium.py",
+    "comment": "3D infinite-medium invariant (phi = q/sigma_a = 2) for PWQD and PWLD, reflecting box, AAH",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ]
+  },
+  {
+    "file": "transport_3d_pwqd_prototype_box4.py",
+    "comment": "PWLD cross-check against the Beyond_PWLD prototype cell averages (4^3 unit cube, GLC 2x4); PWQD run for information",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "MaxRelDiff-pwld-vs-prototype=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-06
+      }
+    ]
+  },
+  {
+    "file": "transport_3d_pwqd_thick_limit.py",
+    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwqd=",
+        "goldvalue": 0.0125,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwqd=",
+        "goldvalue": 0.0057,
+        "abs_tol": 0.0005
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwld=",
+        "goldvalue": 0.0724,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwld=",
+        "goldvalue": 0.0625,
+        "abs_tol": 0.001
+      }
+    ]
+  },
+  {
+    "file": "transport_3d_pwqd_infinite_medium.py",
+    "comment": "3D infinite-medium invariant (phi = q/sigma_a = 2) for PWQD and PWLD, reflecting box, AAH",
+    "num_procs": 4,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwld=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Max-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Avg-value-pwqd=",
+        "goldvalue": 2.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_infinite_medium_np4"
+  },
+  {
+    "file": "transport_3d_pwqd_prototype_box4.py",
+    "comment": "PWLD cross-check against the Beyond_PWLD prototype cell averages (4^3 unit cube, GLC 2x4); PWQD run for information",
+    "num_procs": 4,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "MaxRelDiff-pwld-vs-prototype=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-06
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_prototype_box4_np4"
+  },
+  {
+    "file": "transport_3d_pwqd_thick_limit.py",
+    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration",
+    "num_procs": 4,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwqd=",
+        "goldvalue": 0.0125,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwqd=",
+        "goldvalue": 0.0057,
+        "abs_tol": 0.0005
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwld=",
+        "goldvalue": 0.0724,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwld=",
+        "goldvalue": 0.0625,
+        "abs_tol": 0.001
+      }
+    ],
+    "outfileprefix": "transport_3d_pwqd_thick_limit_np4"
   }
 ]

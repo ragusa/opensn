@@ -403,6 +403,40 @@ on the mesh (total number of polyhedral cells, total number of faces)
 and not on the number of energy groups used nor the number of directions
 employed.
 
+| **Piece-Wise Quadratic Discontinuous (PWQD) basis functions.** OpenSn
+  also offers a quadratic generalization of the PWL basis on
+  three-dimensional polyhedra (``spatial_discretization="pwqd"`` on
+  ``DiscreteOrdinatesProblem``). The polyhedron is split into the same
+  side tetrahedra as for PWL, but the standard quadratic (P2) Lagrange
+  element is used on each tetrahedron instead of the linear one. The P2
+  nodes of the sub-mesh are of three kinds: the polyhedron vertices and
+  the midpoints of the polyhedron edges, which are the unknowns of the
+  cell (:math:`2 n_v + n_f - 2` per cell by Euler's formula, i.e., 10 on a
+  tetrahedron and 20 on a hexahedron); the nodes on the sub-mesh edges
+  joining a vertex to a face centroid and the face centroids themselves,
+  which are *tied* to the unknowns of that face by a least-squares
+  quadratic fit in the plane of the face (exact interpolation on
+  triangular faces); and the nodes involving the polyhedron centroid,
+  which are tied to all unknowns of the cell by a least-squares quadratic
+  fit. With average weights and linear sub-elements this construction is
+  exactly PWL, so PWQD reduces to PWLD for :math:`p = 1`; on a tetrahedron
+  it is the standard P2 Lagrange element. The tying rules are face-local,
+  so the trace of the basis on a face depends only on the unknowns of that
+  face and is identical from both sides: the upwind sweep, the face
+  matrices and the MIP diffusion operator used for DSA are assembled
+  exactly as for PWL, with :math:`2 n_f` face nodes per face instead of
+  :math:`n_f`. The basis reproduces all quadratic polynomials on cells
+  with planar faces (all linear polynomials on non-planar faces), gives
+  third-order convergence of the scalar flux for smooth solutions and
+  preserves the thick diffusion limit. Every basis function is piecewise
+  quadratic on the side tetrahedra, so a fourth-order tetrahedral
+  quadrature integrates the mass matrix exactly. The MIP penalty constant
+  is scaled by :math:`p(p+1)/2` and the penalty length uses the
+  face-dependent orthogonal projection of
+  :cite:t:`turcksin2014discontinuous`. In this version PWQD is available
+  for 3D polyhedral meshes with AAH sweeps on CPUs, for steady-state
+  source and eigenvalue problems.
+
 
 References
 ----------
@@ -438,6 +472,7 @@ References
    reed1973triangularmesh
    reed1973triplet
    seed1977trident
+   turcksin2014discontinuous
    seed1978trident
    wang2009adaptive
    wang2009convergence

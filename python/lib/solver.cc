@@ -1239,6 +1239,14 @@ WrapLBS(py::module& slv)
     sweep_type : str, default="AAH"
         The sweep type to use. Must be one of `AAH` or `CBC`. Defaults to `AAH`.
         Both sweep types support time-dependent (transient) mode.
+    spatial_discretization : str, default="pwld"
+        Spatial discretization. ``"pwld"`` is the piecewise linear discontinuous
+        basis (nodes at the cell vertices). ``"pwqd"`` is the piecewise quadratic
+        discontinuous basis (nodes at the cell vertices and edge midpoints; P2 on
+        the side tetrahedra of each cell with quadratic-precision tying), which
+        currently requires a 3D polyhedral mesh, ``sweep_type="AAH"``, CPU
+        execution and a steady-state problem; MIP DSA uses the face-dependent
+        penalty length with it.
     time_dependent : bool, default=False
         If true, the problem starts in time-dependent mode. Otherwise it starts in
         steady-state mode. Requires ``options.save_angular_flux=True`` and

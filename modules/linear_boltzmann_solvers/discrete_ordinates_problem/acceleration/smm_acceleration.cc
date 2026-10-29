@@ -84,6 +84,9 @@ SMMAcceleration::Initialize()
   // Create PWLC structure, if needed
   if (sdm_ == "pwlc")
   {
+    if (sdm.GetType() != SpatialDiscretizationType::PIECEWISE_LINEAR_DISCONTINUOUS)
+      throw std::invalid_argument(GetName() + ": sdm=\"pwlc\" requires the transport problem to "
+                                              "use spatial_discretization=\"pwld\".");
     pwlc_ptr_ = PieceWiseLinearContinuous::New(do_problem_.GetGrid());
     ghost_info_ = MakePWLDGhostInfo(sdm, do_problem_.GetUnknownManager());
   }

@@ -92,6 +92,9 @@ public:
    */
   const std::string& GetSweepType() const { return sweep_type_; }
 
+  /// Name of the spatial discretization ("pwld" or "pwqd").
+  const std::string& GetSpatialDiscretizationType() const { return spatial_discretization_type_; }
+
   bool UseFusedAAO() const { return options_.fused_aao_sweep; }
 
   unsigned int GetFusedAAOLanes() const { return options_.fused_aao_lanes; }
@@ -280,6 +283,8 @@ protected:
   void CheckConfigurationErrors(std::vector<std::string>& errors) const override;
 
   /// CSDA rules; does nothing for problems without CSDA.
+  /// Rejects configurations the quadratic discretization does not support yet.
+  void CheckPWQD(std::vector<std::string>& errors) const;
   void CheckCSDA(std::vector<std::string>& errors) const;
 
   /// Rejects sigma_t <= 0 where an XY quadrature has a direction with no in-plane component.
@@ -375,6 +380,8 @@ protected:
     quadrature_fluds_commondata_map_;
 
   const std::string sweep_type_;
+  /// Spatial discretization selected at input: "pwld" (default) or "pwqd".
+  const std::string spatial_discretization_type_;
   /// Time-absorption scale 1/(theta dt) of the current DSA operators (0 when steady).
   double dsa_time_absorption_scale_ = 0.0;
   /** @} */

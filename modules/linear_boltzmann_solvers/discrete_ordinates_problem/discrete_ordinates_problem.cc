@@ -21,6 +21,7 @@
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/acceleration/tgdsa.h"
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_discontinuous.h"
+#include "framework/math/spatial_discretization/finite_element/piecewise_quadratic/piecewise_quadratic_discontinuous.h"
 #include "framework/logging/log.h"
 #include "framework/utils/error.h"
 #include "framework/utils/caliper_scopes.h"
@@ -53,6 +54,13 @@ DiscreteOrdinatesProblem::GetInputParameters()
   params.AddOptionalParameter(
     "sweep_type", "AAH", "The sweep type to use for sweep operatorations.");
   params.ConstrainParameterRange("sweep_type", AllowableRangeList::New({"AAH", "CBC"}));
+  params.AddOptionalParameter("spatial_discretization",
+                              "pwld",
+                              "Spatial discretization: \"pwld\" (piecewise linear discontinuous) "
+                              "or \"pwqd\" (piecewise quadratic discontinuous; 3D polyhedral "
+                              "meshes, AAH sweeps on CPU).");
+  params.ConstrainParameterRange("spatial_discretization",
+                                 AllowableRangeList::New({"pwld", "pwqd"}));
   params.AddOptionalParameter("time_dependent",
                               false,
                               "If true, initializes the problem in time-dependent mode. "
@@ -109,7 +117,9 @@ DiscreteOrdinatesProblem::Create(const ParameterBlock& params)
 }
 
 DiscreteOrdinatesProblem::DiscreteOrdinatesProblem(const InputParameters& params)
-  : LBSProblem(params), sweep_type_(params.GetParamValue<std::string>("sweep_type"))
+  : LBSProblem(params),
+    sweep_type_(params.GetParamValue<std::string>("sweep_type")),
+    spatial_discretization_type_(params.GetParamValue<std::string>("spatial_discretization"))
 {
   // The configuration (time-dependent mode, adjoint, uncollided flux, ...) is validated by
   // ValidateConfiguration() in BuildRuntime(), once the object is fully constructed. The rules are
@@ -480,6 +490,8 @@ DiscreteOrdinatesProblem::CheckConfigurationErrors(std::vector<std::string>& err
   if (options_.fused_aao_sweep and (not use_gpus_ or sweep_type_ != "AAH"))
     errors.emplace_back("fused_aao_sweep requires sweep_type=\"AAH\" and use_gpus=True.");
 
+  CheckPWQD(errors);
+
   CheckCSDA(errors);
 
   // Collective. Check all ranks before any sweep can propagate NaNs.
@@ -524,6 +536,29 @@ DiscreteOrdinatesProblem::CheckNonStreamingDirections(std::vector<std::string>& 
                           " has a direction with no in-plane component, which requires a "
                           "positive sigma_t.");
   }
+}
+
+void
+DiscreteOrdinatesProblem::CheckPWQD(std::vector<std::string>& errors) const
+{
+  if (spatial_discretization_type_ != "pwqd")
+    return;
+
+  // The quadratic basis is implemented for 3D polyhedral cells, CPU AAH sweeps and the
+  // steady-state source and eigenvalue solvers only.
+  if (grid_->GetDimension() != 3)
+    errors.emplace_back("spatial_discretization=\"pwqd\" requires a 3D (polyhedral) mesh.");
+  if (use_gpus_)
+    errors.emplace_back("spatial_discretization=\"pwqd\" is not supported on GPUs.");
+  if (sweep_type_ != "AAH")
+    errors.emplace_back("spatial_discretization=\"pwqd\" requires sweep_type=\"AAH\".");
+  if (IsTimeDependent())
+    errors.emplace_back("spatial_discretization=\"pwqd\" does not support time-dependent mode.");
+  if (HasUncollidedFlux())
+    errors.emplace_back("spatial_discretization=\"pwqd\" does not support an uncollided flux "
+                        "file.");
+  if (options_.csda_enabled)
+    errors.emplace_back("spatial_discretization=\"pwqd\" does not support CSDA.");
 }
 
 void
@@ -617,7 +652,10 @@ DiscreteOrdinatesProblem::CheckCSDA(std::vector<std::string>& errors) const
 void
 DiscreteOrdinatesProblem::InitializeSpatialDiscretization()
 {
-  discretization_ = PieceWiseLinearDiscontinuous::New(grid_);
+  if (spatial_discretization_type_ == "pwqd")
+    discretization_ = PieceWiseQuadraticDiscontinuous::New(grid_);
+  else
+    discretization_ = PieceWiseLinearDiscontinuous::New(grid_);
   LBSProblem::InitializeSpatialDiscretization();
 }
 

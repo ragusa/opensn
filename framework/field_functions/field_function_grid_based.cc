@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "framework/field_functions/field_function_grid_based.h"
+#include "framework/math/spatial_discretization/cell_mappings/cell_mapping.h"
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_continuous.h"
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_discontinuous.h"
 #include "framework/math/spatial_discretization/spatial_discretization.h"
@@ -301,9 +302,21 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
       {
         const size_t num_nodes = sdm->GetCellNumNodes(*cell);
 
-        if (num_nodes == cell->vertex_ids.size())
+        const size_t num_verts = cell->vertex_ids.size();
+        // Discretizations whose first nodes are the cell vertices (PWLD, PWQD) export the vertex
+        // nodal values; any other node layout exports the nodal average at every vertex.
+        bool vertex_nodes_first = num_nodes >= num_verts;
+        if (vertex_nodes_first and num_nodes != num_verts)
         {
-          for (size_t n = 0; n < num_nodes; ++n)
+          const auto& node_locations = sdm->GetCellMapping(*cell).GetNodeLocations();
+          for (size_t v = 0; v < num_verts and vertex_nodes_first; ++v)
+            vertex_nodes_first =
+              (node_locations[v] - grid->GlobalVertex(cell->vertex_ids[v])).NormSquare() < 1.0e-24;
+        }
+
+        if (vertex_nodes_first)
+        {
+          for (size_t n = 0; n < num_verts; ++n)
           {
             const auto nmap = sdm->MapDOFLocal(*cell, n, uk_man, 0, c);
 
