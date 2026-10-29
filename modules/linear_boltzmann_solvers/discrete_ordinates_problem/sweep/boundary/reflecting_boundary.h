@@ -11,6 +11,8 @@
 namespace opensn
 {
 
+class SpatialDiscretization;
+
 /// Reflective boundary condition.
 class ReflectingBoundary : public SweepBoundary
 {
@@ -18,6 +20,7 @@ public:
   ReflectingBoundary(BoundaryBank& bank,
                      std::uint64_t bid,
                      const std::shared_ptr<Mesh>& grid,
+                     const SpatialDiscretization& sdm,
                      const std::vector<LBSGroupset>& groupsets,
                      const Vector3& normal,
                      CoordinateSystemType coord_type = CoordinateSystemType::CARTESIAN);

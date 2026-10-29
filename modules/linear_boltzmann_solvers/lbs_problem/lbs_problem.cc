@@ -4,6 +4,7 @@
 #include "modules/linear_boltzmann_solvers/lbs_problem/lbs_problem.h"
 #include "modules/linear_boltzmann_solvers/lbs_problem/point_source/point_source.h"
 #include "modules/linear_boltzmann_solvers/lbs_problem/groupset/lbs_groupset.h"
+#include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/fluds/fluds_common_data.h"
 #include "framework/field_functions/field_function_grid_based.h"
 #include "framework/materials/multi_group_xs/multi_group_xs.h"
 #include "framework/mesh/mesh/mesh.h"
@@ -1329,33 +1330,10 @@ LBSProblem::InitializeParrays()
   outflow_bank_ = OutflowBank(*grid_, num_groups_, store_internal_outflows_);
   cell_outflow_views_ = outflow_bank_.GetCellOutflowViews();
 
-  // Populate grid nodal mappings
-  // This is used in the Flux Data Structure (FLUDS).
-  grid_nodal_mappings_.clear();
-  grid_nodal_mappings_.reserve(grid_->GetLocalCellCount());
-  for (const auto& cell : grid_->GetLocalCells())
-  {
-    CellFaceNodalMapping cell_nodal_mapping;
-    cell_nodal_mapping.reserve(cell->faces.size());
-
-    for (auto& face : cell->faces)
-    {
-      std::vector<short> face_node_mapping;
-      std::vector<short> cell_node_mapping;
-      int adj_face_idx = -1;
-
-      if (face.has_neighbor)
-      {
-        grid_->FindAssociatedVertices(face, face_node_mapping);
-        grid_->FindAssociatedCellVertices(face, cell_node_mapping);
-        adj_face_idx = face.GetNeighborAdjacentFaceIndex(grid_.get());
-      }
-
-      cell_nodal_mapping.emplace_back(adj_face_idx, face_node_mapping, cell_node_mapping);
-    }
-
-    grid_nodal_mappings_.push_back(cell_nodal_mapping);
-  }
+  // Populate grid nodal mappings (used by the Flux Data Structures, FLUDS): face nodes are
+  // matched to the neighbour's nodes through the spatial discretization, so that bases with
+  // nodes other than the cell vertices are supported.
+  grid_nodal_mappings_ = MakeGridNodalMappings(*grid_, *discretization_);
 
   sweep_communicator_ = std::make_shared<SweepCommunicator>(mpi_comm, groupsets_.size());
 

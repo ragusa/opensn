@@ -9,6 +9,8 @@
 #include "modules/linear_boltzmann_solvers/lbs_problem/groupset/lbs_groupset.h"
 #include "framework/logging/log.h"
 #include "framework/math/quadratures/angular/product_quadrature.h"
+#include "framework/math/spatial_discretization/spatial_discretization.h"
+#include "framework/math/spatial_discretization/cell_mappings/cell_mapping.h"
 #include "framework/mesh/mesh/grid_face_histogram.h"
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/runtime.h"
@@ -736,9 +738,24 @@ BuildAAHGlobalSweepGraph(SweepRuntime& runtime)
   PrintRequestedSweepGraphs(spds_list);
 }
 
+/// Face histogram from the per-face node counts of the discretization (face vertices for PWLD).
+std::shared_ptr<GridFaceHistogram>
+MakeFaceNodeHistogram(const Mesh& grid, const SpatialDiscretization& discretization)
+{
+  std::vector<size_t> face_sizes;
+  for (const auto& cell : grid.GetLocalCells())
+  {
+    const auto& cell_mapping = discretization.GetCellMapping(*cell);
+    for (size_t f = 0; f < cell->faces.size(); ++f)
+      face_sizes.push_back(cell_mapping.GetNumFaceNodes(f));
+  }
+  return GridFaceHistogram::Build(std::move(face_sizes));
+}
+
 void
 BuildAAHCPUFludsCommonData(SweepRuntime& runtime,
                            const std::shared_ptr<Mesh>& grid,
+                           const SpatialDiscretization& discretization,
                            const std::vector<CellFaceNodalMapping>& grid_nodal_mappings)
 {
   struct WorkItem
@@ -756,7 +773,7 @@ BuildAAHCPUFludsCommonData(SweepRuntime& runtime,
   if (work.empty())
     return;
 
-  const auto grid_face_histogram = grid->MakeGridFaceHistogram();
+  const auto grid_face_histogram = MakeFaceNodeHistogram(*grid, discretization);
   const size_t nthreads = std::min<size_t>(std::max(1U, opensn_num_threads), work.size());
   log.Log() << program_timer.GetTimeString() << " FLUDS construction: " << work.size()
             << " angles (" << nthreads << " threads(s)).";
@@ -766,7 +783,7 @@ BuildAAHCPUFludsCommonData(SweepRuntime& runtime,
               [&](size_t i)
               {
                 result[i] = AAH_FLUDSCommonData::MakeAlpha(
-                  grid_nodal_mappings, *work[i].spds, *grid_face_histogram);
+                  grid_nodal_mappings, *work[i].spds, *grid_face_histogram, discretization);
               });
 
   // Inter-rank face exchange must retain identical ordering on every rank.
@@ -853,7 +870,7 @@ BuildSweepRuntime(const std::string& problem_name,
   if (not use_gpus)
   {
     if (sweep_type == "AAH")
-      BuildAAHCPUFludsCommonData(runtime, grid, grid_nodal_mappings);
+      BuildAAHCPUFludsCommonData(runtime, grid, discretization, grid_nodal_mappings);
     else if (sweep_type == "CBC")
       BuildCBCCPUFludsCommonData(runtime, grid_nodal_mappings);
   }

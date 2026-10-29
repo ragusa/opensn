@@ -51,7 +51,7 @@ ComputePointwisePhiChange(
   for (const auto& cell : grid_ptr->GetLocalCells())
   {
     const auto& transport_view = cell_transport_views[cell->local_id];
-    for (auto i = 0; i < cell->vertex_ids.size(); ++i)
+    for (int i = 0; i < transport_view.GetNumNodes(); ++i)
     {
       for (auto id : groupset_ids)
       {

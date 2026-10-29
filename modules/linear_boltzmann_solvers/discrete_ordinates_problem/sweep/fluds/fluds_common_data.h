@@ -10,6 +10,8 @@ namespace opensn
 {
 
 class SPDS;
+class Mesh;
+class SpatialDiscretization;
 
 /**
  * Get pointer to index data of a cell and the number of indices for that cell.
@@ -44,6 +46,17 @@ struct FaceNodalMapping
   }
 };
 using CellFaceNodalMapping = std::vector<FaceNodalMapping>;
+
+/**
+ * Builds, for every local cell and face, the nodal mapping to the neighbouring cell (local or
+ * ghost): the neighbour's face index, and for each face node of the cell mapping the index of
+ * the neighbour's face node and cell node at the same location. For PWLD (face nodes = face
+ * vertices) this reproduces the vertex-id matching of Mesh::FindAssociatedVertices; for
+ * higher-order discretizations the match is by node location, so edge or face nodes need no
+ * global numbering. Boundary faces get an associated face index of -1 and empty mappings.
+ */
+std::vector<CellFaceNodalMapping> MakeGridNodalMappings(const Mesh& grid,
+                                                        const SpatialDiscretization& sdm);
 
 class FLUDSCommonData
 {

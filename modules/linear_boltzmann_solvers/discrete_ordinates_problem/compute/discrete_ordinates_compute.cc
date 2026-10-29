@@ -213,7 +213,8 @@ ComputeBalanceTable(DiscreteOrdinatesProblem& do_problem,
 
               if (mu < 0.0)
               {
-                for (int fi = 0; fi < face.vertex_ids.size(); ++fi)
+                const auto num_face_nodes = cell_mapping.GetNumFaceNodes(f);
+                for (size_t fi = 0; fi < num_face_nodes; ++fi)
                 {
                   const int i = cell_mapping.MapFaceNode(f, fi);
                   const auto& IntFi_shapeI = IntS_shapeI[f](i);

@@ -312,7 +312,7 @@ DiscreteOrdinatesProblem::InitializeBoundaries()
                              GetName() + ": reflecting boundary " + std::to_string(bid) +
                                " is not planar.");
         sweep_boundaries_[bid] = std::make_shared<ReflectingBoundary>(
-          boundary_bank_, bid, grid_, groupsets_, *normal, coord_sys);
+          boundary_bank_, bid, grid_, *discretization_, groupsets_, *normal, coord_sys);
         has_reflecting_boundaries_ = true;
         break;
       }

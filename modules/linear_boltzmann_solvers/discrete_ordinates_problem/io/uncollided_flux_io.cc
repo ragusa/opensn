@@ -175,7 +175,7 @@ DiscreteOrdinatesProblemIO::ReadUncollidedFlux(const DiscreteOrdinatesProblem& d
       const auto& sigma_t = transport_view.GetXS().GetSigmaTotal();
       for (size_t i = 0; i < num_nodes; ++i)
       {
-        const auto& vertex = grid->GlobalVertex(cell->vertex_ids[i]);
+        const auto& vertex = discretization.GetCellMapping(*cell).GetNodeLocations()[i];
         constexpr double coordinate_tolerance = 1.0e-12;
         OpenSnInvalidArgumentIf(
           std::abs(file_nodes_x[file_cell_offset + i] - vertex.x) > coordinate_tolerance or

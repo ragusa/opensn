@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <vector>
 
 namespace opensn
@@ -20,6 +21,16 @@ public:
     : face_categories_(face_categories)
   {
   }
+
+  /**
+   * Builds the histogram from the per-face node counts of the local faces (one entry per face).
+   * The faces are binned by node count; a binned histogram is produced only when the largest
+   * face has more than master_tolerance times the average number of nodes, and a new bin starts
+   * when a face has more than slave_tolerance times the running average.
+   */
+  static std::shared_ptr<GridFaceHistogram> Build(std::vector<size_t> face_sizes,
+                                                  double master_tolerance = 100.0,
+                                                  double slave_tolerance = 1.1);
 
   /// Returns the number of bins.
   size_t GetNumberOfFaceHistogramBins() const;

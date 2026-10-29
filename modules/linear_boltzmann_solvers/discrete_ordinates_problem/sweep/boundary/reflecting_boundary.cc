@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/boundary/reflecting_boundary.h"
+#include "framework/math/spatial_discretization/spatial_discretization.h"
+#include "framework/math/spatial_discretization/cell_mappings/cell_mapping.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/angle_aggregation/angle_aggregation.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/angle_set/angle_set.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/sweep.h"
@@ -124,6 +126,7 @@ ReflectingBoundary::AppendDelayedAngularFields(int groupset_id, bool old_store, 
 ReflectingBoundary::ReflectingBoundary(BoundaryBank& bank,
                                        std::uint64_t bid,
                                        const std::shared_ptr<Mesh>& grid,
+                                       const SpatialDiscretization& sdm,
                                        const std::vector<LBSGroupset>& groupsets,
                                        const Vector3& normal,
                                        CoordinateSystemType coord_type)
@@ -136,12 +139,13 @@ ReflectingBoundary::ReflectingBoundary(BoundaryBank& bank,
   for (const auto& cell : grid->GetLocalCells())
   {
     const auto& cell_id = cell->local_id;
+    const auto& cell_mapping = sdm.GetCellMapping(*cell);
     for (unsigned int f = 0; f < cell->faces.size(); ++f)
     {
       const auto& face = cell->faces[f];
       if (not face.has_neighbor and face.neighbor_id == bid)
       {
-        const auto num_face_nodes = face.vertex_ids.size();
+        const auto num_face_nodes = cell_mapping.GetNumFaceNodes(f);
         for (unsigned int fnode = 0; fnode < num_face_nodes; ++fnode)
         {
           FaceNode fn(cell_id, f, fnode);

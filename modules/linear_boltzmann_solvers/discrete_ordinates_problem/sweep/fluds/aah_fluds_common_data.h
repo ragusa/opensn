@@ -17,9 +17,20 @@ namespace opensn
 class GridFaceHistogram;
 class Cell;
 class CellFace;
+class SpatialDiscretization;
 
-// face_slot index, vertex ids
-using CompactFaceView = std::pair<int64_t, std::vector<uint64_t>>;
+/**
+ * Face view exchanged between ranks: the slot where the face's angular flux is stored on the
+ * owning rank, the face index in the owning cell and the number of face nodes. The receiving
+ * rank identifies the face through its own nodal mapping (the neighbour cell is a ghost cell
+ * there), so no node identities need to be transmitted.
+ */
+struct CompactFaceView
+{
+  int64_t face_slot = 0;
+  int32_t face_index = -1;
+  int32_t num_face_nodes = 0;
+};
 
 // cell_global_id, faces
 using CompactCellView = std::pair<uint64_t, std::vector<CompactFaceView>>;
@@ -34,7 +45,8 @@ public:
   static std::unique_ptr<AAH_FLUDSCommonData>
   MakeAlpha(const std::vector<CellFaceNodalMapping>& grid_nodal_mappings,
             const SPDS& spds,
-            const GridFaceHistogram& grid_face_histogram);
+            const GridFaceHistogram& grid_face_histogram,
+            const SpatialDiscretization& sdm);
 
   struct INCOMING_FACE_INFO
   {
@@ -53,7 +65,8 @@ public:
 private:
   explicit AAH_FLUDSCommonData(const std::vector<CellFaceNodalMapping>& grid_nodal_mappings,
                                const SPDS& spds,
-                               const GridFaceHistogram& grid_face_histogram);
+                               const GridFaceHistogram& grid_face_histogram,
+                               const SpatialDiscretization& sdm);
 
 public:
   /// Complete SPDS construction. Exchange inter-rank face data via MPI. This routine must be
@@ -64,6 +77,8 @@ public:
 
 protected:
   friend class AAH_FLUDS;
+  /// Discretization providing the per-face node counts.
+  const SpatialDiscretization& sdm_;
   size_t largest_face_ = 0;
   /// Number of face categories
   size_t num_face_categories_ = 0;
@@ -142,10 +157,8 @@ private:
    * Given a sweep ordering index, the outgoing face counter, the outgoing face dof, this function
    * computes the location of this position's upwind psi in the local upwind psi vector.
    */
-  void AddFaceViewToDepLocI(int deplocI,
-                            uint64_t cell_g_index,
-                            uint64_t face_slot,
-                            const CellFace& face);
+  void AddFaceViewToDepLocI(
+    int deplocI, uint64_t cell_g_index, uint64_t face_slot, int face_index, size_t num_face_nodes);
 
   void LocalIncidentMapping(const Cell& cell,
                             const SPDS& spds,
