@@ -359,6 +359,23 @@ The ``*_func`` variants use a scalar material function supplied with
 applied at the sampled nodes and volume quadrature points before taking the
 global minimum or maximum.
 
+``SetSpatialOperationFunction`` takes instead a function of the value, the
+block id and the position at which the field was sampled. With ``"sum_func"``
+this integrates an arbitrary function of the solution and of position over the
+logical volume, which gives for instance the L2 error against a known solution:
+
+.. code-block:: python
+
+   import math
+   exact = lambda p: math.sin(math.pi * p.x) * math.sin(math.pi * p.y) * math.sin(math.pi * p.z)
+   ffi = FieldFunctionInterpolationVolume()
+   ffi.AddFieldFunction(phys.GetScalarFluxFieldFunction()[0])
+   ffi.SetLogicalVolume(RPPLogicalVolume(infx=True, infy=True, infz=True))
+   ffi.SetOperationType("sum_func")
+   ffi.SetSpatialOperationFunction(lambda value, block, p: (value - exact(p)) ** 2)
+   ffi.Execute()
+   l2_error = math.sqrt(ffi.GetValue())
+
 Volume Postprocessor
 ====================
 

@@ -13,6 +13,8 @@ namespace opensn
 using ScalarSpatialFunction = std::function<double(const Vector3&)>;
 using ScalarSpatialMaterialFunction = std::function<double(int, const Vector3&)>;
 using ScalarMaterialFunction = std::function<double(double, unsigned int)>;
+/// A function of a field value, the block ID and the position at which the value was sampled.
+using ScalarMaterialSpatialFunction = std::function<double(double, unsigned int, const Vector3&)>;
 
 /// Base class for evaluating spatial material functions given a coordinate.
 class VectorSpatialFunction : public std::function<std::vector<double>(const Vector3&, std::size_t)>

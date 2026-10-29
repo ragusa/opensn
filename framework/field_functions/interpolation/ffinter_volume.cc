@@ -55,6 +55,16 @@ FieldFunctionInterpolationVolume::Execute()
   const auto cid = ref_component_;
 
   const auto field_data = ref_ff.GetGhostedFieldVector();
+  const bool uses_function = op_type_ >= FieldFunctionInterpolationOperation::OP_SUM_FUNC and
+                             op_type_ <= FieldFunctionInterpolationOperation::OP_MIN_FUNC;
+  if (uses_function and not oper_function_ and not spatial_oper_function_)
+    throw std::logic_error("FieldFunctionInterpolationVolume::Execute: the operation requires "
+                           "a function set with SetOperationFunction.");
+  auto apply = [this](double value, unsigned int block_id, const Vector3& xyz)
+  {
+    return spatial_oper_function_ ? spatial_oper_function_(value, block_id, xyz)
+                                  : oper_function_(value, block_id);
+  };
   // Physical volume measure (2*pi*r in RZ, 4*pi*r^2 in 1D spherical geometry).
   const auto spatial_weight = sdm.GetSpatialWeightingFunction();
 
@@ -76,12 +86,13 @@ FieldFunctionInterpolationVolume::Execute()
       node_dof_values[i] = field_data[imap];
     }
 
+    const auto& node_locations = cell_mapping.GetNodeLocations();
     for (size_t i = 0; i < num_nodes; ++i)
     {
       double value = node_dof_values[i];
       if (op_type_ == FieldFunctionInterpolationOperation::OP_MAX_FUNC or
           op_type_ == FieldFunctionInterpolationOperation::OP_MIN_FUNC)
-        value = oper_function_(value, cell.block_id);
+        value = apply(value, cell.block_id, node_locations[i]);
       local_max = std::fmax(value, local_max);
       local_min = std::fmin(value, local_min);
     }
@@ -93,9 +104,8 @@ FieldFunctionInterpolationVolume::Execute()
         ff_value += fe_vol_data.ShapeValue(j, qp) * node_dof_values[j];
 
       double function_value = ff_value;
-      if (op_type_ >= FieldFunctionInterpolationOperation::OP_SUM_FUNC and
-          op_type_ <= FieldFunctionInterpolationOperation::OP_MIN_FUNC)
-        function_value = oper_function_(ff_value, cell.block_id);
+      if (uses_function)
+        function_value = apply(ff_value, cell.block_id, fe_vol_data.QPointXYZ(qp));
 
       const double dV = spatial_weight(fe_vol_data.QPointXYZ(qp)) * fe_vol_data.JxW(qp);
       local_volume += dV;

@@ -400,6 +400,27 @@ WrapFieldFunctionInterpolation(py::module& ffunc)
     py::arg("function")
   );
   field_func_interp_volume.def(
+    "SetSpatialOperationFunction",
+    [](FieldFunctionInterpolationVolume& self, const ScalarMaterialSpatialFunction& function)
+    {
+      self.SetOperationFunction(function);
+    },
+    R"(
+    Set the field function operation to a custom function of the value, the block id and the
+    position. It replaces a function set with ``SetOperationFunction``. With the operation type
+    ``"sum_func"`` this integrates f(phi_h(x), block, x) over the logical volume, for instance
+    the squared error against a known solution.
+
+    Parameters
+    ----------
+    function: Callable[[float, int, pyopensn.math.Vector3], float]
+        A function of the field function value, the block id and the position at which the
+        field was sampled (a volume quadrature point, or a node for ``"min_func"`` and
+        ``"max_func"``).
+    )",
+    py::arg("function")
+  );
+  field_func_interp_volume.def(
     "GetValue",
     &FieldFunctionInterpolationVolume::GetValue,
     R"(

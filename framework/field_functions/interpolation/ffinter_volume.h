@@ -42,7 +42,23 @@ public:
 
   double GetValue() const { return op_value_; }
 
-  void SetOperationFunction(const ScalarMaterialFunction& function) { oper_function_ = function; }
+  void SetOperationFunction(const ScalarMaterialFunction& function)
+  {
+    oper_function_ = function;
+    spatial_oper_function_ = nullptr;
+  }
+
+  /**
+   * Operation function of the field value, the block ID and the position at which the field was
+   * sampled (a quadrature point, or a node for the min/max operations). Replaces the function
+   * set with SetOperationFunction. With "sum_func" this gives integrals of f(phi_h(x), x), e.g.
+   * the squared L2 error of a solution against a known function.
+   */
+  void SetOperationFunction(const ScalarMaterialSpatialFunction& function)
+  {
+    spatial_oper_function_ = function;
+    oper_function_ = nullptr;
+  }
 
   void Execute() override;
 
@@ -53,6 +69,7 @@ private:
   FieldFunctionInterpolationOperation op_type_;
   double op_value_;
   ScalarMaterialFunction oper_function_;
+  ScalarMaterialSpatialFunction spatial_oper_function_;
   std::vector<std::uint32_t> cell_local_ids_inside_logvol_;
 
 public:
