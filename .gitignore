@@ -83,3 +83,7 @@ doc/source/tutorials/**/*.vtu
 doc/source/tutorials/**/*.py
 
 doc/source/tutorials/**/.ipynb_checkpoints/
+# PWQD unit-test mesh assets (small, hand-written)
+!test/assets/mesh/pwqd_hex_sheared_2.vtu
+!test/assets/mesh/pwqd_hex_perturbed_2.vtu
+!test/assets/mesh/pwqd_tets_2.vtu

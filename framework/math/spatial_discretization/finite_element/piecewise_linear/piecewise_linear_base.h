@@ -7,6 +7,7 @@
 #include "framework/math/quadratures/spatial/line_quadrature.h"
 #include "framework/math/quadratures/spatial/triangle_quadrature.h"
 #include "framework/math/quadratures/spatial/tetrahedra_quadrature.h"
+#include <functional>
 
 namespace opensn
 {
@@ -28,7 +29,15 @@ protected:
   TriangleQuadrature tri_quad_order_arbitrary_;
   TetrahedraQuadrature tet_quad_order_arbitrary_;
 
+  /// Factory producing the cell mapping of a cell.
+  using CellMappingFactory = std::function<std::unique_ptr<CellMapping>(const Cell&)>;
+
+  /// Creates the piecewise-linear cell mappings (slab, polygon, polyhedron) of all local and
+  /// ghost cells.
   void CreateCellMappings();
+
+  /// Creates the cell mappings of all local and ghost cells with the given factory.
+  void CreateCellMappings(const CellMappingFactory& factory);
 };
 
 } // namespace opensn

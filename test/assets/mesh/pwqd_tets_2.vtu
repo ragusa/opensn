@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">
+  <UnstructuredGrid>
+    <Piece NumberOfPoints="12" NumberOfCells="12">
+      <CellData Scalars="BlockID">
+        <DataArray type="Int32" Name="BlockID" format="ascii">
+          0 0 0 0 0 0 0 0 0 0 0 0
+        </DataArray>
+      </CellData>
+      <Points>
+        <DataArray type="Float64" Name="Points" NumberOfComponents="3" format="ascii">
+          0.01966427118235231 0.03868591828171671 0.04723097049051146
+          1.070792045404328 0.03838377195838891 0.06757199946646673
+          1.924640836525378 -0.005500375299503146 0.07093707471973019
+          0.02383592850190787 1.0641440786801 -0.0618870456554969
+          0.9950510476451462 0.9594516532191728 0.007001737477748862
+          2.011830590068496 0.9220982703342243 -0.04532323192578429
+          -0.03528282143822235 0.06661525948936832 1.042516072260663
+          0.9455366739772861 0.04754351862899271 0.9422027869438245
+          2.018792403274579 -0.05972812279195684 0.9202839779524056
+          0.05942475915588515 0.9535130211992189 0.9544769870759572
+          1.077187377412148 1.059585242469888 0.9662888268395082
+          2.073836478232014 1.00627575501933 1.028452876360095
+        </DataArray>
+      </Points>
+      <Cells>
+        <DataArray type="Int64" Name="connectivity" format="ascii">
+          0 1 4 10 0 7 1 10 0 4 3 10 0 3 9 10 0 6 7 10 0 9 6 10 1 2 5 11 1 8 2 11 1 5 4 11 1 4 10 11 1 7 8 11 1 10 7 11
+        </DataArray>
+        <DataArray type="Int64" Name="offsets" format="ascii">
+          4 8 12 16 20 24 28 32 36 40 44 48
+        </DataArray>
+        <DataArray type="UInt8" Name="types" format="ascii">
+          10 10 10 10 10 10 10 10 10 10 10 10
+        </DataArray>
+      </Cells>
+    </Piece>
+  </UnstructuredGrid>
+</VTKFile>

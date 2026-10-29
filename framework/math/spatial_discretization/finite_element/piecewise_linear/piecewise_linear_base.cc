@@ -25,7 +25,7 @@ PieceWiseLinearBase::CreateCellMappings()
 {
   constexpr std::string_view fname = __PRETTY_FUNCTION__;
 
-  auto MakeCellMapping = [this, fname](const Cell& cell)
+  CellMappingFactory MakeCellMapping = [this, fname](const Cell& cell)
   {
     using namespace std;
     using namespace opensn;
@@ -64,13 +64,19 @@ PieceWiseLinearBase::CreateCellMappings()
     return mapping;
   };
 
+  CreateCellMappings(MakeCellMapping);
+}
+
+void
+PieceWiseLinearBase::CreateCellMappings(const CellMappingFactory& factory)
+{
   for (const auto& cell : grid_->GetLocalCells())
-    cell_mappings_.push_back(MakeCellMapping(*cell));
+    cell_mappings_.push_back(factory(*cell));
 
   const auto ghost_ids = grid_->GetGhostGlobalIDs();
   for (uint64_t ghost_id : ghost_ids)
   {
-    auto ghost_mapping = MakeCellMapping(grid_->GetGlobalCell(ghost_id));
+    auto ghost_mapping = factory(grid_->GetGlobalCell(ghost_id));
     nb_cell_mappings_.insert(std::make_pair(ghost_id, std::move(ghost_mapping)));
   }
 }

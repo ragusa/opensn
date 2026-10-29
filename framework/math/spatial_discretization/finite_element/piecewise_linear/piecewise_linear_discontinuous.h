@@ -55,6 +55,15 @@ protected:
   std::vector<std::uint32_t> cell_local_block_address_;
   std::vector<std::pair<uint64_t, int64_t>> neighbor_cell_block_address_;
 
+  /**
+   * Constructor for derived discontinuous discretizations that reuse the PWLD node ordering,
+   * sparsity pattern and DOF mapping with their own cell mappings.
+   */
+  PieceWiseLinearDiscontinuous(const std::shared_ptr<Mesh>& grid,
+                               QuadratureOrder q_order,
+                               SpatialDiscretizationType sdm_type,
+                               const CellMappingFactory& factory);
+
 private:
   explicit PieceWiseLinearDiscontinuous(const std::shared_ptr<Mesh>& grid, QuadratureOrder q_order);
 

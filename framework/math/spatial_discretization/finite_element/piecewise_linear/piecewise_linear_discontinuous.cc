@@ -22,6 +22,16 @@ PieceWiseLinearDiscontinuous::PieceWiseLinearDiscontinuous(const std::shared_ptr
   OrderNodes();
 }
 
+PieceWiseLinearDiscontinuous::PieceWiseLinearDiscontinuous(const std::shared_ptr<Mesh>& grid,
+                                                           QuadratureOrder q_order,
+                                                           SpatialDiscretizationType sdm_type,
+                                                           const CellMappingFactory& factory)
+  : PieceWiseLinearBase(grid, q_order, sdm_type)
+{
+  CreateCellMappings(factory);
+  OrderNodes();
+}
+
 std::shared_ptr<PieceWiseLinearDiscontinuous>
 PieceWiseLinearDiscontinuous::New(const std::shared_ptr<Mesh>& grid, QuadratureOrder q_order)
 {
