@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/source_functions/source_function.h"
+#include "framework/math/quadratures/angular/angular_quadrature.h"
 #include "modules/linear_boltzmann_solvers/lbs_problem/lbs_problem.h"
 #include "modules/linear_boltzmann_solvers/lbs_problem/compute/lbs_compute.h"
 #include "framework/mesh/mesh/mesh.h"
@@ -229,6 +230,15 @@ SourceFunction::AddVolumetricSources(const LBSGroupset& groupset,
   const auto gs_f = groupset.last_group;
   const double source_time = lbs_problem_.GetTime();
 
+  // Angular sources are projected onto the moments with the discrete-to-moment operator of
+  // the groupset quadrature, q_m = sum_n w_n Y_m(omega_n) q(x, omega_n), so that the
+  // moment-to-discrete operator in the sweep returns q(x, omega_n) exactly whenever the angular
+  // dependence lies in the span of the harmonics kept (the manufactured-solution use case).
+  const auto num_moments = lbs_problem_.GetNumMoments();
+  const auto& quadrature = *groupset.quadrature;
+  const auto& omegas = quadrature.GetOmegas();
+  const auto& d2m = quadrature.GetDiscreteToMomentOperator();
+
   // Go through each volumetric source, and its subscribing cells
   if (not lbs_problem_.GetOptions().use_src_moments and apply_fixed_src)
   {
@@ -236,6 +246,11 @@ SourceFunction::AddVolumetricSources(const LBSGroupset& groupset,
     {
       if (not volumetric_source->IsActive(source_time))
         continue;
+
+      const bool angular = volumetric_source->IsAngular();
+      if (angular and d2m.dimension()[1] < num_moments)
+        throw std::logic_error("SourceFunction::AddVolumetricSources: the groupset quadrature "
+                               "carries fewer moments than the problem.");
 
       for (const auto local_id : volumetric_source->GetSubscribers())
       {
@@ -247,6 +262,23 @@ SourceFunction::AddVolumetricSources(const LBSGroupset& groupset,
         // Go through each of the cell nodes
         for (size_t i = 0; i < num_cell_nodes; ++i)
         {
+          if (angular)
+          {
+            for (size_t n = 0; n < omegas.size(); ++n)
+            {
+              const auto src = volumetric_source->EvaluateAngular(
+                cell, nodes[i], omegas[n], num_groups, source_time);
+              for (unsigned int m = 0; m < num_moments; ++m)
+              {
+                const double weight = d2m(n, m);
+                const auto dof_map = transport_view.MapDOF(i, m, 0);
+                for (auto g = gs_i; g <= gs_f; ++g)
+                  q[dof_map + g] += weight * src[g];
+              }
+            }
+            continue;
+          }
+
           // Compute group-wise values for this node
           const auto src = volumetric_source->Evaluate(cell, nodes[i], num_groups, source_time);
 

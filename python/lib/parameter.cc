@@ -93,6 +93,7 @@ pyobj_to_param_block(const std::string& key, const py::object& obj)
   TO_PARAMBLOCK(SurfaceMesh);
   TO_PARAMBLOCK(VolumetricSource);
   TO_PARAMBLOCK(VectorSpatialFunction);
+  TO_PARAMBLOCK(VectorSpatialAngularFunction);
   TO_PARAMBLOCK(AngularFluxFunction);
   TO_PARAMBLOCK(AngularFluxTimeFunction);
 

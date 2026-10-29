@@ -462,6 +462,9 @@ ResponseEvaluator::EvaluateResponse(const std::string& buffer) const
 
   // Volumetric sources
   for (const auto& volumetric_source : volumetric_sources_)
+  {
+    if (volumetric_source->IsAngular())
+      throw std::logic_error("ResponseEvaluator: angular volumetric sources are not supported.");
     for (const std::uint32_t local_id : volumetric_source->GetSubscribers())
     {
       const auto& cell = grid->GetLocalCell(local_id);
@@ -479,6 +482,7 @@ ResponseEvaluator::EvaluateResponse(const std::string& buffer) const
           local_response += vals[g] * phi_dagger[dof_map + g] * V_i;
       }
     }
+  }
 
   // Report a physical response: curvilinear unit integrals omit the angular extent (2*pi in RZ).
   local_response *= IntegralMeasureScale(grid->GetCoordinateSystem());

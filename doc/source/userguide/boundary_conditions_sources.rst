@@ -471,8 +471,8 @@ Important restriction:
 Volumetric Sources
 ==================
 
-:py:class:`pyopensn.source.VolumetricSource` represents a multi-group isotropic
-volumetric source.
+:py:class:`pyopensn.source.VolumetricSource` represents a multi-group
+volumetric source, isotropic unless an angular function is given.
 
 It can be defined over:
 
@@ -486,6 +486,7 @@ Constructor options:
 * ``logical_volume``
 * ``group_strength``
 * ``func``
+* ``angular_func``
 * ``strength_function``
 * ``start_time``
 * ``end_time``
@@ -499,6 +500,7 @@ and exactly one source-definition mode:
 
 * ``group_strength``
 * ``func``
+* ``angular_func``
 * ``strength_function``
 
 Block-ID-Based Volumetric Sources
@@ -595,6 +597,56 @@ Important behavior:
 
    ``VectorSpatialFunction`` is the natural choice when the source has a spatial
    profile but does not need custom angular structure.
+
+Angular Functional Volumetric Sources
+-------------------------------------
+
+Use :py:class:`pyopensn.math.VectorSpatialAngularFunction` when the source
+depends on the direction as well, which is what the method of manufactured
+solutions requires: for a manufactured angular flux :math:`\psi(x, \Omega)` the
+source is :math:`q = \Omega \cdot \nabla \psi + \sigma_t \psi - Q_s[\psi]`
+with :math:`Q_s` the scattering source.
+
+The callback signature is:
+
+.. code-block:: python
+
+   def angular_source(point, omega, num_groups) -> list[float]:
+       ...
+
+The source is the emission density per unit solid angle, normalised like the
+angular flux: an isotropic source of strength ``q`` is the callback returning
+``q`` for every direction. Example for the manufactured isotropic flux
+:math:`\psi = \sin(\pi x) \sin(\pi y) \sin(\pi z)` with isotropic scattering:
+
+.. code-block:: python
+
+   import math
+   from pyopensn.math import VectorSpatialAngularFunction
+
+   sigma_t, sigma_s = 1.0, 0.5
+
+   def mms_source(p, omega, num_groups):
+       sx, sy, sz = math.sin(math.pi * p.x), math.sin(math.pi * p.y), math.sin(math.pi * p.z)
+       cx, cy, cz = math.cos(math.pi * p.x), math.cos(math.pi * p.y), math.cos(math.pi * p.z)
+       streaming = math.pi * (omega.x * cx * sy * sz + omega.y * sx * cy * sz + omega.z * sx * sy * cz)
+       return [streaming + (sigma_t - sigma_s) * sx * sy * sz] * num_groups
+
+   src = VolumetricSource(
+       block_ids=[0],
+       angular_func=VectorSpatialAngularFunction(mms_source),
+   )
+
+Important behavior:
+
+* the source is projected onto the moments carried by the groupset quadrature
+  (its ``scattering_order``), so it is represented exactly only when its
+  angular dependence lies in the span of those spherical harmonics. The
+  example above needs ``scattering_order`` at least 1.
+* the callback is evaluated at the nodes of the selected cells, once per
+  quadrature direction.
+* an angular function is mutually exclusive with ``group_strength``, ``func``
+  and ``strength_function``, and is not supported by the response evaluator.
 
 Group-Time Functional Volumetric Sources
 ----------------------------------------

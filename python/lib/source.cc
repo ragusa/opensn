@@ -105,7 +105,7 @@ WrapVolumetricSource(py::module& src)
     src,
     "VolumetricSource",
     R"(
-      Multi-group isotropic volumetric sources.
+      Multi-group volumetric sources, isotropic unless an angular function is given.
 
       A source object stores the cells it applies to on the mesh of the problem (or response
       evaluator) it was most recently added to. Sharing it between problems on the same mesh is
@@ -136,7 +136,7 @@ WrapVolumetricSource(py::module& src)
       }
     ),
     R"(
-    Construct a multi-group isotropic volumetric sources.
+    Construct a multi-group volumetric source.
 
     Parameters
     ----------
@@ -149,6 +149,13 @@ WrapVolumetricSource(py::module& src)
         is not provided.
     func: pyopensn.math.VectorSpatialFunction
         Function to be used to define the source.
+    angular_func: pyopensn.math.VectorSpatialAngularFunction
+        Function of the position, the direction and the number of groups defining a
+        direction-dependent source (emission density per unit solid angle, normalised like the
+        angular flux so that an isotropic source of strength q returns q in every direction).
+        The source is projected onto the moments of the groupset quadrature; it is represented
+        exactly when its angular dependence lies in the span of the spherical harmonics kept,
+        i.e. up to the scattering order of the quadrature. Intended for manufactured solutions.
     strength_function: Callable
         Callable that returns the source strength for a given group (and optionally time). It must
         accept either `(group, time)` for transient problems or just `(group)` for steady-state.

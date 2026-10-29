@@ -40,6 +40,13 @@ VolumetricSource::GetInputParameters()
     "func",
     std::shared_ptr<VectorSpatialFunction>{},
     "VectorSpatialFunction object to be used to define the source.");
+  params.AddOptionalParameter<std::shared_ptr<VectorSpatialAngularFunction>>(
+    "angular_func",
+    std::shared_ptr<VectorSpatialAngularFunction>{},
+    "VectorSpatialAngularFunction object defining a direction-dependent source (position, "
+    "direction, number of groups). The source is projected onto the moments carried by the "
+    "groupset quadrature, so it is represented exactly only when its angular dependence lies in "
+    "the span of those spherical harmonics (method of manufactured solutions).");
   params.AddOptionalParameter<std::shared_ptr<GroupTimeFunction>>(
     "strength_function",
     std::shared_ptr<GroupTimeFunction>{},
@@ -65,6 +72,8 @@ VolumetricSource::VolumetricSource(const InputParameters& params)
     logvol_(params.GetSharedPtrParam<LogicalVolume>("logical_volume", false)),
     strength_(params.GetParamVectorValue<double>("group_strength")),
     function_(params.GetSharedPtrParam<VectorSpatialFunction>("func", false)),
+    angular_function_(
+      params.GetSharedPtrParam<VectorSpatialAngularFunction>("angular_func", false)),
     strength_function_(params.GetSharedPtrParam<GroupTimeFunction>("strength_function", false)),
     start_time_(params.GetParamValue<double>("start_time")),
     end_time_(params.GetParamValue<double>("end_time"))
@@ -75,11 +84,14 @@ VolumetricSource::VolumetricSource(const InputParameters& params)
   const bool has_strength = not strength_.empty();
   const bool has_spatial_func = static_cast<bool>(function_);
   const bool has_strength_func = static_cast<bool>(strength_function_);
-  if ((has_strength ? 1 : 0) + (has_spatial_func ? 1 : 0) + (has_strength_func ? 1 : 0) == 0)
+  const bool has_angular_func = static_cast<bool>(angular_function_);
+  const int num_modes = (has_strength ? 1 : 0) + (has_spatial_func ? 1 : 0) +
+                        (has_strength_func ? 1 : 0) + (has_angular_func ? 1 : 0);
+  if (num_modes == 0)
     throw std::invalid_argument("Either a function or the source strength must be provided.");
-  if ((has_strength ? 1 : 0) + (has_spatial_func ? 1 : 0) + (has_strength_func ? 1 : 0) > 1)
-    throw std::invalid_argument(
-      "Specify only one of group_strength, func, or strength_function for a volumetric source.");
+  if (num_modes > 1)
+    throw std::invalid_argument("Specify only one of group_strength, func, strength_function, or "
+                                "angular_func for a volumetric source.");
   if (function_ and has_strength)
     throw std::invalid_argument(
       "If a function is provided, the source strength should not be set.");
@@ -155,6 +167,9 @@ VolumetricSource::Evaluate(const Cell& cell,
                            const unsigned int num_groups,
                            const double time) const
 {
+  if (angular_function_)
+    throw std::logic_error("VolumetricSource::Evaluate: this source is angular; use "
+                           "EvaluateAngular.");
   if (std::count(subscribers_.begin(), subscribers_.end(), cell.local_id) == 0)
     return std::vector<double>(num_groups, 0.0); // NOLINT
   else if (not function_)
@@ -170,6 +185,20 @@ VolumetricSource::Evaluate(const Cell& cell,
   }
   else
     return (*function_)(xyz, num_groups);
+}
+
+std::vector<double>
+VolumetricSource::EvaluateAngular(const Cell& cell,
+                                  const Vector3& xyz,
+                                  const Vector3& omega,
+                                  const unsigned int num_groups,
+                                  const double /*time*/) const
+{
+  if (not angular_function_)
+    throw std::logic_error("VolumetricSource::EvaluateAngular: this source is not angular.");
+  if (std::count(subscribers_.begin(), subscribers_.end(), cell.local_id) == 0)
+    return std::vector<double>(num_groups, 0.0); // NOLINT
+  return (*angular_function_)(xyz, omega, num_groups);
 }
 
 bool

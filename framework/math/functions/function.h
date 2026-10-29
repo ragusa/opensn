@@ -27,6 +27,23 @@ public:
   }
 };
 
+/**
+ * Base class for evaluating angle-dependent spatial functions: given a position, a direction
+ * and the number of groups, return one value per group. Used for angular volumetric sources
+ * (method of manufactured solutions).
+ */
+class VectorSpatialAngularFunction
+  : public std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>
+{
+public:
+  VectorSpatialAngularFunction() = default;
+  VectorSpatialAngularFunction(
+    const std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>& src)
+    : std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>(src)
+  {
+  }
+};
+
 /// Base class for evaluating incoming angular fluxes given group and direction indices.
 class AngularFluxFunction : public std::function<double(int, int)>
 {

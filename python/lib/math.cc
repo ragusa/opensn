@@ -278,6 +278,72 @@ WrapFunctors(py::module& math)
     py::arg("num_groups")
   );
 
+  // vector spatial angular function
+  auto vector_spatial_angular_function =
+    py::class_<VectorSpatialAngularFunction, std::shared_ptr<VectorSpatialAngularFunction>>(
+    math,
+    "VectorSpatialAngularFunction",
+    R"(
+    Vector spatial angular function.
+
+    Functions that accept a point, a direction and a number of groups as input and return a
+    vector (per group). Used to define direction-dependent volumetric sources, for instance the
+    source of a manufactured solution.
+
+    Wrapper of :cpp:class:`opensn::VectorSpatialAngularFunction`.
+
+    Examples
+    --------
+    >>> # Create from a Python function
+    >>> def foo(point, omega, n_groups):
+    ...     return [omega.x * point.y] * n_groups
+    >>> f = VectorSpatialAngularFunction(foo)
+    >>>
+    >>> # Evaluate
+    >>> f(Vector3(1.0, 2.0, 3.0), Vector3(1.0, 0.0, 0.0), 2)
+    [2.0, 2.0]
+    )"
+  );
+  vector_spatial_angular_function.def(
+    py::init(
+      [](const std::function<std::vector<double>(const Vector3&, const Vector3&, int)>& func)
+      {
+        return std::make_shared<VectorSpatialAngularFunction>(func);
+      }
+    ),
+    R"(
+    Construct a vector spatial angular function from associated Python function or lambda.
+
+    Parameters
+    ----------
+    func: Callable[[pyopensn.math.Vector3, pyopensn.math.Vector3, int], List[float]]
+        Referenced function of the position, the unit direction and the number of groups.
+    )",
+    py::arg("func")
+  );
+  vector_spatial_angular_function.def(
+    "__call__",
+    [](VectorSpatialAngularFunction& self, const Vector3& xyz, const Vector3& omega, int num_groups)
+    {
+      return self(xyz, omega, num_groups);
+    },
+    R"(
+    Evaluate the associated function.
+
+    Parameters
+    ----------
+    xyz: pyopensn.math.Vector3
+        The xyz coordinates of the point where the function is called.
+    omega: pyopensn.math.Vector3
+        The unit direction.
+    num_groups: int
+        The number of groups.
+    )",
+    py::arg("xyz"),
+    py::arg("omega"),
+    py::arg("num_groups")
+  );
+
   // angular flux function
   auto angular_flux_function = py::class_<AngularFluxFunction, std::shared_ptr<AngularFluxFunction>>(
     math,

@@ -38,6 +38,7 @@ Function wrappers
    :template: function.rst
 
    math.VectorSpatialFunction
+   math.VectorSpatialAngularFunction
    math.AngularFluxFunction
    math.AngularFluxTimeFunction
 
