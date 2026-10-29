@@ -1095,5 +1095,115 @@
         "abs_tol": 1e-12
       }
     ]
+  },
+  {
+    "file": "keigenvalue_transport_3d_pwqd_kinf.py",
+    "comment": "Infinite-medium k_inf = 1 invariant for PWQD and PWLD (and PWQD + SCDSA), reflecting box (AAH sweeps)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwld=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd-scdsa=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "keigenvalue_transport_3d_pwqd_kinf_aah_np1"
+  },
+  {
+    "file": "keigenvalue_transport_3d_pwqd_kinf.py",
+    "comment": "Infinite-medium k_inf = 1 invariant for PWQD and PWLD (and PWQD + SCDSA), reflecting box (CBC sweeps)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwld=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd-scdsa=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "env": {
+      "PWQD_SWEEP_TYPE": "CBC"
+    },
+    "outfileprefix": "keigenvalue_transport_3d_pwqd_kinf_cbc_np1"
+  },
+  {
+    "file": "keigenvalue_transport_3d_pwqd_kinf.py",
+    "comment": "Infinite-medium k_inf = 1 invariant for PWQD and PWLD (and PWQD + SCDSA), reflecting box (AAH sweeps)",
+    "num_procs": 4,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwld=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd-scdsa=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "outfileprefix": "keigenvalue_transport_3d_pwqd_kinf_aah_np4"
+  },
+  {
+    "file": "keigenvalue_transport_3d_pwqd_kinf.py",
+    "comment": "Infinite-medium k_inf = 1 invariant for PWQD and PWLD (and PWQD + SCDSA), reflecting box (CBC sweeps)",
+    "num_procs": 4,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwld=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "k-eigenvalue-pwqd-scdsa=",
+        "goldvalue": 1.0,
+        "abs_tol": 1e-08
+      }
+    ],
+    "env": {
+      "PWQD_SWEEP_TYPE": "CBC"
+    },
+    "outfileprefix": "keigenvalue_transport_3d_pwqd_kinf_cbc_np4"
   }
 ]
