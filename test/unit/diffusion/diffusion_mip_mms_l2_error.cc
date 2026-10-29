@@ -12,6 +12,7 @@
 #include "framework/logging/log.h"
 #include "framework/math/functions/function.h"
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_discontinuous.h"
+#include "framework/math/spatial_discretization/finite_element/piecewise_quadratic/piecewise_quadratic_discontinuous.h"
 #include "framework/math/spatial_discretization/finite_element/unit_cell_matrices.h"
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/runtime.h"
@@ -28,27 +29,37 @@ using namespace opensn;
 namespace
 {
 
+// Manufactured solution: phi = cos(pi x) + cos(pi y) [+ cos(pi z) in 3D], D = 1, sigma_r = 0,
+// so q = -div(D grad phi) = pi^2 phi.
+bool mms_3d = false;
+
 double
 MMS_phi(const Vector3& pt)
 {
-  return std::cos(M_PI * pt.x) + std::cos(M_PI * pt.y);
+  return std::cos(M_PI * pt.x) + std::cos(M_PI * pt.y) + (mms_3d ? std::cos(M_PI * pt.z) : 0.0);
 }
 
 double
 MMS_q(const Vector3& pt)
 {
-  return M_PI * M_PI * (std::cos(M_PI * pt.x) + std::cos(M_PI * pt.y));
+  return M_PI * M_PI * MMS_phi(pt);
 }
 
 std::pair<double, double>
-SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid)
+SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid, const std::string& sdm_type = "PWLD")
 {
   using MatID2XSMap = std::map<unsigned int, Multigroup_D_and_sigR>;
 
-  opensn::log.Log() << "SimTest_IP_MMS_L2error";
+  opensn::log.Log() << "SimTest_IP_MMS_L2error (" << sdm_type << ")";
   opensn::log.Log() << "Global num cells: " << grid->GetGlobalNumberOfCells();
 
-  std::shared_ptr<SpatialDiscretization> sdm_ptr = PieceWiseLinearDiscontinuous::New(grid);
+  std::shared_ptr<SpatialDiscretization> sdm_ptr;
+  if (sdm_type == "PWLD")
+    sdm_ptr = PieceWiseLinearDiscontinuous::New(grid);
+  else if (sdm_type == "PWQD")
+    sdm_ptr = PieceWiseQuadraticDiscontinuous::New(grid);
+  else
+    throw std::invalid_argument("unknown sdm_type " + sdm_type);
   const auto& sdm = *sdm_ptr;
   const auto& one_dof_per_node = sdm.UNITARY_UNKNOWN_MANAGER;
 
@@ -86,6 +97,8 @@ SimTest_IP_MMS_L2error(std::shared_ptr<Mesh> grid)
   solver.options.verbose = true;
   solver.options.residual_tolerance = 1.0e-10;
   solver.options.perform_symmetry_check = true;
+  if (sdm_type == "PWQD")
+    solver.options.h_perp_convention = "face";
   solver.SetReferenceSolutionFunction(mms_phi);
   solver.SetSourceFunction(mms_q);
   solver.Initialize();
@@ -178,6 +191,52 @@ TEST(DiffusionMIP, MMSL2Convergence)
     opensn::log.Log() << "MIP MMS N=" << refinements[k] << " L2 rate=" << rate;
     EXPECT_GT(rate, 1.75);
   }
+
+  opensn::mpi_comm.barrier();
+}
+
+/**
+ * 3D PWQD: the MMS error must converge at third order (p + 1 = 3) on orthogonal hexes, against
+ * second order for PWLD on the same meshes. The reference is the exact manufactured solution; the
+ * rates are compared with the theoretical ones.
+ */
+TEST(DiffusionMIP, MMSL2ConvergencePWQD3D)
+{
+  if (opensn::mpi_comm.size() != 1)
+    return;
+
+  mms_3d = true;
+  const std::array<unsigned int, 3> refinements = {2, 4, 8};
+  const double length = 2.0;
+
+  std::map<std::string, std::vector<double>> errors;
+  for (const std::string sdm_type : {"PWLD", "PWQD"})
+    for (const unsigned int num_cells : refinements)
+    {
+      auto grid = BuildBoxMesh(length, num_cells, -length / 2.0);
+      grid->SetUniformBlockID(0);
+      grid->SetOrthogonalBoundaries();
+
+      const auto [full_assembly_error, rhs_assembly_error] = SimTest_IP_MMS_L2error(grid, sdm_type);
+      errors[sdm_type].push_back(full_assembly_error);
+      EXPECT_NEAR(rhs_assembly_error, full_assembly_error, 1.0e-12);
+    }
+  mms_3d = false;
+
+  // Two cells per side are pre-asymptotic for a cosine (PWLD rate 0.13 on 2^3 -> 4^3), so the
+  // rate is checked on the finest pair; monotone decrease is required everywhere.
+  for (const auto& [sdm_type, err] : errors)
+    for (size_t k = 1; k < err.size(); ++k)
+    {
+      EXPECT_LT(err[k], err[k - 1]);
+      const double rate = std::log(err[k - 1] / err[k]) / std::log(2.0);
+      opensn::log.Log() << "MIP MMS 3D " << sdm_type << " N=" << refinements[k]
+                        << " L2 err=" << std::scientific << err[k] << " rate=" << rate;
+      if (k + 1 == err.size())
+        EXPECT_GT(rate, sdm_type == "PWQD" ? 2.6 : 1.75);
+    }
+  // At equal h the quadratic basis is far more accurate than the linear one
+  EXPECT_LT(errors["PWQD"].back(), 0.25 * errors["PWLD"].back());
 
   opensn::mpi_comm.barrier();
 }

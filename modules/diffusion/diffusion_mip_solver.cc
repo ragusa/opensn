@@ -36,13 +36,23 @@ DiffusionMIPSolver::DiffusionMIPSolver(std::string name,
                     false,
                     verbose)
 {
-  if (sdm_.GetType() != SpatialDiscretizationType::PIECEWISE_LINEAR_DISCONTINUOUS)
-    throw std::logic_error("acceleration::DiffusionMIPSolver can only be used with PWLD.");
+  if (sdm_.GetType() != SpatialDiscretizationType::PIECEWISE_LINEAR_DISCONTINUOUS and
+      sdm_.GetType() != SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS)
+    throw std::logic_error("acceleration::DiffusionMIPSolver can only be used with PWLD or PWQD.");
+}
+
+double
+DiffusionMIPSolver::EffectivePenaltyFactor() const
+{
+  const double p =
+    (sdm_.GetType() == SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS) ? 2.0 : 1.0;
+  return options.penalty_factor * p * (p + 1.0) / 2.0;
 }
 
 void
 DiffusionMIPSolver::AssembleAand_b_wQpoints(const std::vector<double>& q_vector)
 {
+  const double penalty_factor = EffectivePenaltyFactor();
   const std::string fname = "acceleration::DiffusionMIPSolver::"
                             "AssembleAand_b_wQpoints";
   if (A_ == nullptr or rhs_ == nullptr or ksp_ == nullptr)
@@ -140,11 +150,11 @@ DiffusionMIPSolver::AssembleAand_b_wQpoints(const std::vector<double>& q_vector)
           // Compute kappa
           double kappa = 1.0;
           if (cell->GetType() == CellType::SLAB)
-            kappa = fmax(options.penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
+            kappa = fmax(penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
           if (cell->GetType() == CellType::POLYGON)
-            kappa = fmax(options.penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
+            kappa = fmax(penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
           if (cell->GetType() == CellType::POLYHEDRON)
-            kappa = fmax(options.penalty_factor * 2.0 * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
+            kappa = fmax(penalty_factor * 2.0 * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
 
           DenseMatrix<double> adj_A(num_nodes, num_face_nodes, 0.);
           DenseMatrix<double> adj_AT(num_face_nodes, num_nodes, 0.);
@@ -237,11 +247,11 @@ DiffusionMIPSolver::AssembleAand_b_wQpoints(const std::vector<double>& q_vector)
             // Compute kappa
             double kappa = 1.0;
             if (cell->GetType() == CellType::SLAB)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYGON)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYHEDRON)
-              kappa = fmax(options.penalty_factor * 2.0 * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * 2.0 * Dg / hm, 0.25);
 
             // Assembly penalty terms
             for (size_t fi = 0; fi < num_face_nodes; ++fi)
@@ -386,6 +396,7 @@ DiffusionMIPSolver::AssembleAand_b_wQpoints(const std::vector<double>& q_vector)
 void
 DiffusionMIPSolver::Assemble_b_wQpoints(const std::vector<double>& q_vector)
 {
+  const double penalty_factor = EffectivePenaltyFactor();
   const std::string fname = "acceleration::DiffusionMIPSolver::"
                             "AssembleAand_b_wQpoints";
   if (A_ == nullptr or rhs_ == nullptr or ksp_ == nullptr)
@@ -468,11 +479,11 @@ DiffusionMIPSolver::Assemble_b_wQpoints(const std::vector<double>& q_vector)
             // Compute kappa
             double kappa = 1.0;
             if (cell->GetType() == CellType::SLAB)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYGON)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYHEDRON)
-              kappa = fmax(options.penalty_factor * 2.0 * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * 2.0 * Dg / hm, 0.25);
 
             // Assembly penalty terms
             for (size_t fi = 0; fi < num_face_nodes; ++fi)
@@ -585,6 +596,7 @@ DiffusionMIPSolver::Assemble_b_wQpoints(const std::vector<double>& q_vector)
 void
 DiffusionMIPSolver::AssembleAand_b(const std::vector<double>& q_vector)
 {
+  const double penalty_factor = EffectivePenaltyFactor();
   const std::string fname = "acceleration::DiffusionMIPSolver::"
                             "AssembleAand_b";
   if (A_ == nullptr or rhs_ == nullptr or ksp_ == nullptr)
@@ -671,11 +683,11 @@ DiffusionMIPSolver::AssembleAand_b(const std::vector<double>& q_vector)
           // Compute kappa
           double kappa = 1.0;
           if (cell->GetType() == CellType::SLAB)
-            kappa = fmax(options.penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
+            kappa = fmax(penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
           if (cell->GetType() == CellType::POLYGON)
-            kappa = fmax(options.penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
+            kappa = fmax(penalty_factor * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
           if (cell->GetType() == CellType::POLYHEDRON)
-            kappa = fmax(options.penalty_factor * 2.0 * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
+            kappa = fmax(penalty_factor * 2.0 * (adj_Dg / hp + Dg / hm) * 0.5, 0.25);
 
           DenseMatrix<double> adj_A(num_nodes, num_face_nodes, 0.);
           DenseMatrix<double> adj_AT(num_face_nodes, num_nodes, 0.);
@@ -757,11 +769,11 @@ DiffusionMIPSolver::AssembleAand_b(const std::vector<double>& q_vector)
             // Compute kappa
             double kappa = 1.0;
             if (cell->GetType() == CellType::SLAB)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYGON)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYHEDRON)
-              kappa = fmax(options.penalty_factor * 2.0 * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * 2.0 * Dg / hm, 0.25);
 
             // Assembly penalty terms
             for (size_t fi = 0; fi < num_face_nodes; ++fi)
@@ -880,6 +892,7 @@ DiffusionMIPSolver::AssembleAand_b(const std::vector<double>& q_vector)
 void
 DiffusionMIPSolver::Assemble_b(const std::vector<double>& q_vector)
 {
+  const double penalty_factor = EffectivePenaltyFactor();
   const std::string fname = "acceleration::DiffusionMIPSolver::"
                             "Assemble_b";
   if (A_ == nullptr or rhs_ == nullptr or ksp_ == nullptr)
@@ -954,11 +967,11 @@ DiffusionMIPSolver::Assemble_b(const std::vector<double>& q_vector)
             // Compute kappa
             double kappa = 1.0;
             if (cell->GetType() == CellType::SLAB)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYGON)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYHEDRON)
-              kappa = fmax(options.penalty_factor * 2.0 * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * 2.0 * Dg / hm, 0.25);
 
             // Assembly penalty terms
             for (size_t fi = 0; fi < num_face_nodes; ++fi)
@@ -1031,6 +1044,7 @@ DiffusionMIPSolver::Assemble_b(const std::vector<double>& q_vector)
 void
 DiffusionMIPSolver::Assemble_b(Vec petsc_q_vector)
 {
+  const double penalty_factor = EffectivePenaltyFactor();
   const std::string fname = "acceleration::DiffusionMIPSolver::"
                             "Assemble_b";
   if (A_ == nullptr or rhs_ == nullptr or ksp_ == nullptr)
@@ -1108,11 +1122,11 @@ DiffusionMIPSolver::Assemble_b(Vec petsc_q_vector)
             // Compute kappa
             double kappa = 1.0;
             if (cell->GetType() == CellType::SLAB)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYGON)
-              kappa = fmax(options.penalty_factor * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * Dg / hm, 0.25);
             if (cell->GetType() == CellType::POLYHEDRON)
-              kappa = fmax(options.penalty_factor * 2.0 * Dg / hm, 0.25);
+              kappa = fmax(penalty_factor * 2.0 * Dg / hm, 0.25);
 
             // Assembly penalty terms
             for (size_t fi = 0; fi < num_face_nodes; ++fi)
@@ -1234,12 +1248,29 @@ DiffusionMIPSolver::HPerpendicular(const Cell& cell, unsigned int f)
   {
     const auto surface_area = ComputeSurfaceArea();
 
-    if (num_faces == 4) // Tet
-      hp = 3 * volume / surface_area;
-    else if (num_faces == 6 and num_vertices == 8) // Hex
-      hp = volume / surface_area;
-    else // Polyhedron
-      hp = 6 * volume / surface_area;
+    if (options.h_perp_convention == "face")
+    {
+      // Face-dependent orthogonal projections (Turcksin & Ragusa 2014; Hackemack 2016)
+      if (num_faces == 4) // Tet: height of the pyramid over face f
+        hp = 3 * volume / face_area;
+      else if (num_faces == 6 and num_vertices == 8) // Hex: height over face f
+        hp = volume / face_area;
+      else // Polyhedron: diameter of the sphere with the same V/S
+        hp = 6 * volume / surface_area;
+    }
+    else if (options.h_perp_convention == "cell")
+    {
+      if (num_faces == 4) // Tet
+        hp = 3 * volume / surface_area;
+      else if (num_faces == 6 and num_vertices == 8) // Hex
+        hp = volume / surface_area;
+      else // Polyhedron
+        hp = 6 * volume / surface_area;
+    }
+    else
+      throw std::invalid_argument("acceleration::DiffusionMIPSolver::HPerpendicular: unknown "
+                                  "h_perp_convention \"" +
+                                  options.h_perp_convention + "\" (expected \"cell\" or \"face\")");
   } // Polyhedron
   else
     throw std::logic_error("acceleration::DiffusionMIPSolver::HPerpendicular: "

@@ -54,6 +54,10 @@ WGDSA::Init(DiscreteOrdinatesProblem& do_problem,
     solver->options.direct_solve_threshold = groupset.wgdsa_direct_solve_threshold;
     solver->options.verbose = groupset.wgdsa_verbose;
     solver->options.additional_options_string = groupset.wgdsa_string;
+    // PWQD uses the face-dependent penalty length; PWLD keeps OpenSn's cell-wide convention
+    solver->options.h_perp_convention =
+      (sdm.GetType() == SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS) ? "face"
+                                                                                      : "cell";
 
     solver->Initialize();
 

@@ -37,6 +37,13 @@ public:
     PetscInt direct_solve_threshold = 20000;
     std::string additional_options_string;
     double penalty_factor = 4.0;
+    /**
+     * Convention for the MIP penalty length h_perp of polyhedral cells: "cell" uses the
+     * cell-wide values 3V/S (tet), V/S (hex), 6V/S (other), S the total surface area; "face" uses
+     * the face-dependent orthogonal projections 3V/A_f (tet), V/A_f (hex) and 6V/S (other), the
+     * convention of Turcksin & Ragusa (2014). Slab and polygon cells are unaffected.
+     */
+    std::string h_perp_convention = "cell";
   } options;
 
 public:

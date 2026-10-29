@@ -76,6 +76,13 @@ public:
    */
   double HPerpendicular(const Cell& cell, unsigned int f);
 
+  /**
+   * The penalty constant actually used: options.penalty_factor scaled by p(p+1)/2 with p the
+   * polynomial degree of the discretization (1 for PWLD, 2 for PWQD), the usual degree
+   * dependence of the interior-penalty constant.
+   */
+  double EffectivePenaltyFactor() const;
+
   /// Maps a face, in a discontinuous sense, using the spatial discretization.
   int MapFaceNodeDisc(const Cell& cur_cell,
                       const Cell& adj_cell,
