@@ -16,7 +16,7 @@ reference. Both bases preserve the limit (no locking): the errors are the discre
 the limit solution at h = 1/4. Independent reference values at this configuration from the
 Beyond_PWLD prototype (RESULTS.md, "Thick limit under refinement", 2026-10-28): PWQD 0.0125
 (max) / 0.0057 (L2), PWLD 0.0724 / 0.0625.
-SDM: PWLD and PWQD, AAH sweeps.
+SDM: PWLD and PWQD; AAH or CBC sweeps (PWQD_SWEEP_TYPE).
 """
 
 import math
@@ -67,6 +67,9 @@ def limit_cell_averages(n, modes=41):
 
 if __name__ == "__main__":
 
+    # Sweep type from the environment so the same input is registered for AAH and CBC
+    sweep_type = os.environ.get("PWQD_SWEEP_TYPE", "AAH")
+
     N = 4
     eps = 1.0e-4
     nodes = [i / N for i in range(N + 1)]
@@ -116,6 +119,7 @@ if __name__ == "__main__":
                 for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
             ],
             spatial_discretization=sdm,
+            sweep_type=sweep_type,
         )
         solver = SteadyStateSourceSolver(problem=phys)
         solver.Initialize()

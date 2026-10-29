@@ -6,7 +6,7 @@
 the control: unit cube of 2x2x2 hexes, reflecting on all six faces, sigma_t = 1, c = 0.5, uniform
 isotropic source q = 1. The exact solution is the constant phi = q / sigma_a = 2, which every
 basis containing the constants must reproduce to iteration tolerance at every node.
-SDM: PWLD and PWQD, AAH sweeps.
+SDM: PWLD and PWQD; AAH or CBC sweeps (PWQD_SWEEP_TYPE).
 """
 
 import os
@@ -26,6 +26,9 @@ if "opensn_console" not in globals():
     from pyopensn.logvol import RPPLogicalVolume
 
 if __name__ == "__main__":
+
+    # Sweep type from the environment so the same input is registered for AAH and CBC
+    sweep_type = os.environ.get("PWQD_SWEEP_TYPE", "AAH")
 
     nodes = [i / 2 for i in range(2 + 1)]
     grid = OrthogonalMeshGenerator(node_sets=[nodes, nodes, nodes]).Execute()
@@ -58,6 +61,7 @@ if __name__ == "__main__":
                 for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
             ],
             spatial_discretization=sdm,
+            sweep_type=sweep_type,
         )
         solver = SteadyStateSourceSolver(problem=phys)
         solver.Initialize()

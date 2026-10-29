@@ -10,7 +10,7 @@ Beyond_PWLD branch phase0-prototype, studies/out/opensn_box4/prototype.npz, 2026
 listed with x fastest, then y, then z. The same input is also run with PWQD; its peak cell
 average is reported for information (the PWQD anchors are the thick-limit and infinite-medium
 tests).
-SDM: PWLD (checked) and PWQD, AAH sweeps.
+SDM: PWLD (checked) and PWQD; AAH or CBC sweeps (PWQD_SWEEP_TYPE).
 """
 
 import os
@@ -49,6 +49,9 @@ PROTOTYPE_PWLD_CELL_AVERAGES = [
 ]
 
 if __name__ == "__main__":
+
+    # Sweep type from the environment so the same input is registered for AAH and CBC
+    sweep_type = os.environ.get("PWQD_SWEEP_TYPE", "AAH")
 
     N = 4
     nodes = [i / N for i in range(N + 1)]
@@ -91,6 +94,7 @@ if __name__ == "__main__":
                 for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
             ],
             spatial_discretization=sdm,
+            sweep_type=sweep_type,
         )
         solver = SteadyStateSourceSolver(problem=phys)
         solver.Initialize()
