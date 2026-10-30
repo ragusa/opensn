@@ -319,6 +319,54 @@ Important behavior:
    the boundary value part of the timestep solve rather than a Python-side
    boundary replacement between solves.
 
+Spatially Varying Arbitrary Boundaries
+--------------------------------------
+
+The ``function`` and ``time_function`` forms are uniform over the boundary.
+When the incident flux must vary over the boundary, as for the method of
+manufactured solutions, where the incoming trace of the manufactured angular
+flux :math:`\psi(x, \Omega)` is prescribed, use the ``spatial_function``
+entry with a :py:class:`pyopensn.math.VectorSpatialAngularFunction`.
+
+The callback signature is:
+
+.. code-block:: python
+
+   def bc_func(point, omega, num_groups) -> list[float]:
+       ...
+
+It receives the location of a boundary face node and a unit direction and
+returns the incoming angular flux for every group, in OpenSn's discrete
+angular-flux convention (an isotropic inflow of value ``X`` returns ``X`` in
+every direction). It is evaluated once per boundary face node and quadrature
+direction, after the sweep data structures are built, and is constant in time.
+The batched form of ``VectorSpatialAngularFunction`` (one call per node for
+all directions) is accepted as well.
+
+Example for the manufactured isotropic flux :math:`\psi = 1 + x + 2y + 3z`
+(the same function serves every boundary):
+
+.. code-block:: python
+
+   from pyopensn.math import VectorSpatialAngularFunction
+
+   def psi_inc(p, omega, num_groups):
+       return [1.0 + p.x + 2.0 * p.y + 3.0 * p.z] * num_groups
+
+   inflow = VectorSpatialAngularFunction(psi_inc)
+   boundary_conditions = [
+       {"name": name, "type": "arbitrary", "spatial_function": inflow}
+       for name in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
+   ]
+
+Important behavior:
+
+* an ``"arbitrary"`` boundary specifies exactly one of ``function``,
+  ``time_function`` or ``spatial_function``
+* only the incoming directions of a face are used; the function may return
+  anything for the others
+* ``spatial_function`` boundaries are not supported on GPUs
+
 Setting and Replacing Boundary Conditions
 -----------------------------------------
 

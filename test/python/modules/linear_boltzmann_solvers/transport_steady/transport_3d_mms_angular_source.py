@@ -15,6 +15,9 @@ c = 0.5, GLC 4x8 product quadrature, PWLD.
    the PWLD space and the source is nodally exact, so the DG solution must reproduce phi at
    every node to iteration tolerance: this anchors the normalisation of the angular source, the
    discrete-to-moment / moment-to-discrete round trip and the reflecting boundary at once.
+   The same patch test with the exact incoming flux prescribed on every boundary through an
+   "arbitrary" boundary with a spatial_function (psi_inc = phi at the boundary face nodes)
+   anchors the spatially varying boundary condition: face-node locations and normalisation.
 2. Convergence: psi = phi(x) = sin(pi x) sin(pi y) sin(pi z) (zero on the boundary, so vacuum
    boundaries are exact) on 4^3, 8^3, 16^3 hexes; the L2 error against the exact solution is
    integrated with the volume interpolator's spatial operation function. PWLD is second order.
@@ -77,12 +80,20 @@ if __name__ == "__main__":
     pquad = GLCProductQuadrature3DXYZ(n_polar=4, n_azimuthal=8, scattering_order=1)
     whole = RPPLogicalVolume(infx=True, infy=True, infz=True)
 
-    def solve(N, source, bc_type, batched=False):
+    def solve(N, source, bc_type, batched=False, inflow=None):
+        """bc_type: "reflecting" or "vacuum" on every boundary; with inflow (a function of
+        (point, omega, num_groups)) every boundary is "arbitrary" with that spatial_function."""
         nodes = [i / N for i in range(N + 1)]
         grid = OrthogonalMeshGenerator(node_sets=[nodes, nodes, nodes]).Execute()
         grid.SetUniformBlockID(0)
         src = VolumetricSource(block_ids=[0],
                                angular_func=VectorSpatialAngularFunction(source, batched=batched))
+        names = ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
+        if inflow is None:
+            bcs = [{"name": n, "type": bc_type} for n in names]
+        else:
+            psi_inc = VectorSpatialAngularFunction(inflow)
+            bcs = [{"name": n, "type": "arbitrary", "spatial_function": psi_inc} for n in names]
         phys = DiscreteOrdinatesProblem(
             mesh=grid,
             num_groups=1,
@@ -98,10 +109,7 @@ if __name__ == "__main__":
             ],
             xs_map=[{"block_ids": [0], "xs": xs}],
             volumetric_sources=[src],
-            boundary_conditions=[
-                {"name": n, "type": bc_type}
-                for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
-            ],
+            boundary_conditions=bcs,
         )
         solver = SteadyStateSourceSolver(problem=phys)
         solver.Initialize()
@@ -122,6 +130,9 @@ if __name__ == "__main__":
     patch_max_err = integrate(ff, "max_func", lambda v, b, p: abs(v - linear_phi(p)))
     phys, ff = solve(2, linear_source_batched, "reflecting", batched=True)
     patch_max_err_batched = integrate(ff, "max_func", lambda v, b, p: abs(v - linear_phi(p)))
+    # and with the exact incoming flux prescribed on every boundary (spatially varying inflow)
+    phys, ff = solve(2, linear_source, None, inflow=lambda p, omega, n: [linear_phi(p)] * n)
+    patch_max_err_inflow = integrate(ff, "max_func", lambda v, b, p: abs(v - linear_phi(p)))
 
     # 2. Sine MMS convergence
     errors = {}
@@ -134,6 +145,7 @@ if __name__ == "__main__":
     if rank == 0:
         print(f"PatchMaxNodalErr-pwld={patch_max_err:.3e}")
         print(f"PatchMaxNodalErr-pwld-batched={patch_max_err_batched:.3e}")
+        print(f"PatchMaxNodalErr-pwld-inflow={patch_max_err_inflow:.3e}")
         for N, e in errors.items():
             print(f"RelL2Err-pwld-{N}={e:.4e}")
         for a, b in ((4, 8), (8, 16)):

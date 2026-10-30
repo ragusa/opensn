@@ -103,6 +103,14 @@ DiscreteOrdinatesProblem::GetBoundaryOptionsBlock()
     "Time-dependent angular flux function to be used for arbitrary boundary conditions. The "
     "function takes an energy group index, a direction index, and time, and returns the incoming "
     "angular flux value.");
+  params.AddOptionalParameter<std::shared_ptr<VectorSpatialAngularFunction>>(
+    "spatial_function",
+    std::shared_ptr<VectorSpatialAngularFunction>{},
+    "Incident angular flux of the position and the direction for arbitrary boundary conditions "
+    "that vary over the boundary, e.g. the incoming trace of a manufactured solution. The "
+    "function takes a point, a unit direction and the number of groups and returns the incoming "
+    "angular flux per group; it is evaluated once at every boundary face node and quadrature "
+    "direction and is constant in time. Not supported on GPUs.");
   params.ConstrainParameterRange(
     "type", AllowableRangeList::New({"vacuum", "isotropic", "reflecting", "arbitrary"}));
 
@@ -427,6 +435,12 @@ DiscreteOrdinatesProblem::CheckConfigurationErrors(std::vector<std::string>& err
     // are used (see SweepWGSContext::ApplyInverseTransportOperator).
     CheckNoExternalSources("An uncollided flux file replaces fixed sources; remove them.", errors);
   }
+
+  if (use_gpus_)
+    for (const auto& [boundary_id, definition] : boundary_definitions_)
+      if (definition.spatial_angular_flux_function)
+        errors.emplace_back("arbitrary boundary " + std::to_string(boundary_id) +
+                            " uses a spatial_function, which is not supported on GPUs.");
 
   // A reflecting boundary mirrors directions in one plane. The loop is the same on all ranks.
   for (const auto& [boundary_id, definition] : boundary_definitions_)

@@ -6,6 +6,7 @@
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/boundary/vacuum_boundary.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/boundary/isotropic_boundary.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/boundary/arbitrary_boundary.h"
+#include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/boundary/spatial_arbitrary_boundary.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/angle_set/angle_set.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/angle_aggregation/angle_aggregation.h"
 #include "framework/mesh/mesh/mesh.h"
@@ -299,6 +300,18 @@ DiscreteOrdinatesProblem::InitializeBoundaries()
       }
       case LBSBoundaryType::ARBITRARY:
       {
+        if (bndry_def.spatial_angular_flux_function)
+        {
+          // Evaluated once at the boundary face nodes; constant in time
+          sweep_boundaries_[bid] =
+            std::make_shared<SpatialArbitraryBoundary>(boundary_bank_,
+                                                       bid,
+                                                       grid_,
+                                                       *discretization_,
+                                                       groupsets_,
+                                                       bndry_def.spatial_angular_flux_function);
+          break;
+        }
         sweep_boundaries_[bid] = std::make_shared<ArbitraryBoundary>(
           boundary_bank_, groupsets_, bndry_def.time_angular_flux_function);
         has_time_dependent_boundaries_ = true;

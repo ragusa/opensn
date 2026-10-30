@@ -105,6 +105,7 @@ BoundaryDefinition::BoundaryDefinition(const InputParameters& params, unsigned i
     {
       CheckForbiddenParams(params, boundary_name, boundary_type, "function");
       CheckForbiddenParams(params, boundary_name, boundary_type, "time_function");
+      CheckForbiddenParams(params, boundary_name, boundary_type, "spatial_function");
       CheckRequiredParams(params, boundary_name, boundary_type, "group_strength");
       params.RequireParameterBlockTypeIs("group_strength", ParameterBlockType::ARRAY);
       auto param_group_strength = params.GetParamVectorValue<double>("group_strength");
@@ -138,8 +139,31 @@ BoundaryDefinition::BoundaryDefinition(const InputParameters& params, unsigned i
       CheckForbiddenParams(params, boundary_name, boundary_type, "group_strength");
       CheckForbiddenParams(params, boundary_name, boundary_type, "start_time");
       CheckForbiddenParams(params, boundary_name, boundary_type, "end_time");
-      CheckRequiredParams(params, boundary_name, boundary_type, "function", "time_function");
-      if (params.IsParameterValid("function"))
+      const int num_functions = (params.IsParameterValid("function") ? 1 : 0) +
+                                (params.IsParameterValid("time_function") ? 1 : 0) +
+                                (params.IsParameterValid("spatial_function") ? 1 : 0);
+      if (num_functions != 1)
+      {
+        std::ostringstream message;
+        message << "Boundary '" << boundary_name << "' of type=\"" << boundary_type
+                << "\" requires exactly one of \"function\", \"time_function\" or "
+                   "\"spatial_function\".";
+        throw std::invalid_argument(message.str());
+      }
+      if (params.IsParameterValid("spatial_function"))
+      {
+        spatial_angular_flux_function =
+          params.GetSharedPtrParam<VectorSpatialAngularFunction>("spatial_function", false);
+        if (not spatial_angular_flux_function)
+        {
+          std::ostringstream message;
+          message << "Boundary '" << boundary_name
+                  << "' with type=\"arbitrary\" expected parameter \"spatial_function\" to "
+                     "hold a non-null VectorSpatialAngularFunction.";
+          throw std::invalid_argument(message.str());
+        }
+      }
+      else if (params.IsParameterValid("function"))
       {
         auto param_angular_flux_function =
           params.GetSharedPtrParam<AngularFluxFunction>("function", false);
@@ -176,6 +200,7 @@ BoundaryDefinition::BoundaryDefinition(const InputParameters& params, unsigned i
     {
       CheckForbiddenParams(params, boundary_name, boundary_type, "function");
       CheckForbiddenParams(params, boundary_name, boundary_type, "time_function");
+      CheckForbiddenParams(params, boundary_name, boundary_type, "spatial_function");
       CheckForbiddenParams(params, boundary_name, boundary_type, "group_strength");
       CheckForbiddenParams(params, boundary_name, boundary_type, "start_time");
       CheckForbiddenParams(params, boundary_name, boundary_type, "end_time");

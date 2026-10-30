@@ -1142,11 +1142,17 @@ WrapLBS(py::module& slv)
           - time_function: AngularFluxTimeFunction, optional
               Required when ``type='arbitrary'`` unless ``function`` is supplied. Callable that
               returns incoming angular flux from group, direction, and time.
+          - spatial_function: VectorSpatialAngularFunction, optional
+              Alternative for ``type='arbitrary'``: incident angular flux of the position and
+              the direction, ``f(point, omega, num_groups) -> List[float]`` (one value per
+              group), evaluated once at every boundary face node and quadrature direction and
+              constant in time. This is the incoming trace of a manufactured solution. Not
+              supported on GPUs.
 
         Isotropic boundaries may use ``start_time``/``end_time`` for simple on/off behavior.
-        Arbitrary boundaries must specify exactly one of ``function`` or ``time_function``; use
-        ``time_function`` for time-dependent arbitrary inflow and handle any active window inside
-        that callback.
+        Arbitrary boundaries must specify exactly one of ``function``, ``time_function`` or
+        ``spatial_function``; use ``time_function`` for time-dependent arbitrary inflow and handle
+        any active window inside that callback.
     point_sources: List[pyopensn.source.PointSource], default=[]
         A list of point sources.
     volumetric_sources: List[pyopensn.source.VolumetricSource], default=[]
@@ -1371,11 +1377,17 @@ WrapLBS(py::module& slv)
           - time_function: AngularFluxTimeFunction, optional
               Required when ``type='arbitrary'`` unless ``function`` is supplied. Callable that
               returns incoming angular flux from group, direction, and time.
+          - spatial_function: VectorSpatialAngularFunction, optional
+              Alternative for ``type='arbitrary'``: incident angular flux of the position and
+              the direction, ``f(point, omega, num_groups) -> List[float]`` (one value per
+              group), evaluated once at every boundary face node and quadrature direction and
+              constant in time. This is the incoming trace of a manufactured solution. Not
+              supported on GPUs.
 
         Isotropic boundaries may use ``start_time``/``end_time`` for simple on/off behavior.
-        Arbitrary boundaries must specify exactly one of ``function`` or ``time_function``; use
-        ``time_function`` for time-dependent arbitrary inflow and handle any active window inside
-        that callback.
+        Arbitrary boundaries must specify exactly one of ``function``, ``time_function`` or
+        ``spatial_function``; use ``time_function`` for time-dependent arbitrary inflow and handle
+        any active window inside that callback.
 
     Notes
     -----
@@ -1719,11 +1731,17 @@ WrapLBS(py::module& slv)
           - time_function: AngularFluxTimeFunction, optional
               Required when ``type='arbitrary'`` unless ``function`` is supplied. Callable that
               returns incoming angular flux from group, direction, and time.
+          - spatial_function: VectorSpatialAngularFunction, optional
+              Alternative for ``type='arbitrary'``: incident angular flux of the position and
+              the direction, ``f(point, omega, num_groups) -> List[float]`` (one value per
+              group), evaluated once at every boundary face node and quadrature direction and
+              constant in time. This is the incoming trace of a manufactured solution. Not
+              supported on GPUs.
 
         Isotropic boundaries may use ``start_time``/``end_time`` for simple on/off behavior.
-        Arbitrary boundaries must specify exactly one of ``function`` or ``time_function``; use
-        ``time_function`` for time-dependent arbitrary inflow and handle any active window inside
-        that callback.
+        Arbitrary boundaries must specify exactly one of ``function``, ``time_function`` or
+        ``spatial_function``; use ``time_function`` for time-dependent arbitrary inflow and handle
+        any active window inside that callback.
     point_sources: List[pyopensn.source.PointSource], default=[]
         A list of point sources.
     volumetric_sources: List[pyopensn.source.VolumetricSource], default=[]

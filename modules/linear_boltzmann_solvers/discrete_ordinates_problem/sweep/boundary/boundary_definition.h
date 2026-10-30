@@ -43,6 +43,11 @@ struct BoundaryDefinition
   double end_time = std::numeric_limits<double>::infinity();
   /// User-supplied angular flux callback for time-dependent arbitrary boundaries.
   std::shared_ptr<AngularFluxTimeFunction> time_angular_flux_function;
+  /**
+   * User-supplied incident flux of the position and the direction (per group) for arbitrary
+   * boundaries that vary over the boundary (manufactured solutions).
+   */
+  std::shared_ptr<VectorSpatialAngularFunction> spatial_angular_flux_function;
 };
 
 } // namespace opensn
