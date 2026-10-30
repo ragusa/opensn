@@ -75,7 +75,10 @@ public:
   size_t GetNumLocalSubscribers() const { return num_local_subsribers_; }
   size_t GetNumGlobalSubsribers() const { return num_global_subscribers_; }
 
+  /// Sorted local IDs of the cells this source applies to.
   const std::vector<std::uint32_t>& GetSubscribers() const { return subscribers_; }
+  /// True when `cell` is one of the subscribing cells (binary search over the sorted list).
+  bool IsSubscriber(const Cell& cell) const;
   std::shared_ptr<LogicalVolume> GetLogicalVolume() const { return logvol_; }
   const std::vector<unsigned int>& GetBlockIDs() const { return block_ids_; }
   bool IsActive(double time) const;

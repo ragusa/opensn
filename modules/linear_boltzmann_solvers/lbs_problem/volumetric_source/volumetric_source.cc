@@ -11,6 +11,7 @@
 #include "framework/runtime.h"
 #include "framework/parameters/input_parameters.h"
 #include "framework/math/math_time_stepping.h"
+#include <algorithm>
 #include <memory>
 #include <limits>
 
@@ -144,6 +145,9 @@ VolumetricSource::Initialize(const LBSProblem& lbs_problem)
     }
   }
 
+  // Sorted so that Evaluate() can test membership by binary search
+  std::sort(subscribers_.begin(), subscribers_.end());
+
   num_local_subsribers_ = subscribers_.size();
   mpi_comm.all_reduce(num_local_subsribers_, num_global_subscribers_, mpi::op::sum<size_t>());
 
@@ -170,7 +174,7 @@ VolumetricSource::Evaluate(const Cell& cell,
   if (angular_function_)
     throw std::logic_error("VolumetricSource::Evaluate: this source is angular; use "
                            "EvaluateAngular.");
-  if (std::count(subscribers_.begin(), subscribers_.end(), cell.local_id) == 0)
+  if (not IsSubscriber(cell))
     return std::vector<double>(num_groups, 0.0); // NOLINT
   else if (not function_)
   {
@@ -196,9 +200,15 @@ VolumetricSource::EvaluateAngular(const Cell& cell,
 {
   if (not angular_function_)
     throw std::logic_error("VolumetricSource::EvaluateAngular: this source is not angular.");
-  if (std::count(subscribers_.begin(), subscribers_.end(), cell.local_id) == 0)
+  if (not IsSubscriber(cell))
     return std::vector<double>(num_groups, 0.0); // NOLINT
   return (*angular_function_)(xyz, omega, num_groups);
+}
+
+bool
+VolumetricSource::IsSubscriber(const Cell& cell) const
+{
+  return std::binary_search(subscribers_.begin(), subscribers_.end(), cell.local_id);
 }
 
 bool
