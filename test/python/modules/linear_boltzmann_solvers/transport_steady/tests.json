@@ -2957,7 +2957,7 @@
   },
   {
     "file": "transport_3d_pwqd_mms.py",
-    "comment": "Manufactured solutions for PWQD: quadratic patch tests exact on hexes and tets, linear on non-planar perturbed hexes; sine MMS third order on hexes and tets (PWLD second order as control)",
+    "comment": "Manufactured solutions for PWQD: quadratic patch tests exact on hexes and tets (reflecting and with the exact inflow through spatially varying arbitrary boundaries), linear on non-planar perturbed hexes; sine MMS third order on hexes and tets (PWLD second order as control)",
     "num_procs": 1,
     "weight_class": "intermediate",
     "checks": [
@@ -2976,6 +2976,18 @@
       {
         "type": "KeyValuePair",
         "key": "PatchMaxNodalErr-pwqd-perturbed=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-hexes-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-tets-inflow=",
         "goldvalue": 0.0,
         "abs_tol": 1e-09
       },
@@ -3013,7 +3025,7 @@
   },
   {
     "file": "transport_3d_pwqd_mms.py",
-    "comment": "Manufactured solutions for PWQD: quadratic patch tests exact on hexes and tets, linear on non-planar perturbed hexes; sine MMS third order on hexes and tets (PWLD second order as control)",
+    "comment": "Manufactured solutions for PWQD: quadratic patch tests exact on hexes and tets (reflecting and with the exact inflow through spatially varying arbitrary boundaries), linear on non-planar perturbed hexes; sine MMS third order on hexes and tets (PWLD second order as control)",
     "num_procs": 4,
     "weight_class": "intermediate",
     "checks": [
@@ -3032,6 +3044,18 @@
       {
         "type": "KeyValuePair",
         "key": "PatchMaxNodalErr-pwqd-perturbed=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-hexes-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-tets-inflow=",
         "goldvalue": 0.0,
         "abs_tol": 1e-09
       },

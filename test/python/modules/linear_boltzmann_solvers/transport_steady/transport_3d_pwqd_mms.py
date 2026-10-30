@@ -12,7 +12,11 @@ sigma_t = 1, c = 0.5, GLC 4x8 product quadrature with scattering_order 1.
      quadratics on planar-faced cells (least-squares tying reproduces them) and the nodal
      source is exact, so phi must be reproduced at every node to iteration tolerance;
    - linear phi = 1 + x + 2y + 3z on the interior-perturbed hexes with non-planar faces
-     (pwqd_unit_cube_perturbed_4.vtu): the tying reproduces all linear functions there.
+     (pwqd_unit_cube_perturbed_4.vtu): the tying reproduces all linear functions there;
+   - the quadratic case on hexes and tets again with the exact incoming flux prescribed on
+     every boundary through "arbitrary" boundaries with a spatial_function (psi_inc = phi at
+     the boundary face nodes, including the edge midpoints of PWQD): anchors the spatially
+     varying boundary condition on the quadratic face traces.
 2. Convergence with vacuum boundaries, phi = sin(pi x) sin(pi y) sin(pi z): PWQD on 2^3 .. 16^3
    hexes and on the Kuhn tets of the 4^3 and 8^3 grids, PWLD on the same meshes; relative L2
    errors integrated against the exact solution with the spatial operation function of the
@@ -97,8 +101,16 @@ if __name__ == "__main__":
         grid.SetOrthogonalBoundaries()
         return grid
 
-    def solve(grid, sdm, source, bc_type):
+    def solve(grid, sdm, source, bc_type, inflow=None):
+        """bc_type on every boundary, or, with inflow (a function of (point, omega, num_groups)),
+        "arbitrary" boundaries with that spatial_function."""
         src = VolumetricSource(block_ids=[0], angular_func=VectorSpatialAngularFunction(source))
+        names = ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
+        if inflow is None:
+            bcs = [{"name": n, "type": bc_type} for n in names]
+        else:
+            psi_inc = VectorSpatialAngularFunction(inflow)
+            bcs = [{"name": n, "type": "arbitrary", "spatial_function": psi_inc} for n in names]
         phys = DiscreteOrdinatesProblem(
             mesh=grid,
             num_groups=1,
@@ -114,10 +126,7 @@ if __name__ == "__main__":
             ],
             xs_map=[{"block_ids": [0], "xs": xs}],
             volumetric_sources=[src],
-            boundary_conditions=[
-                {"name": n, "type": bc_type}
-                for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
-            ],
+            boundary_conditions=bcs,
             spatial_discretization=sdm,
         )
         solver = SteadyStateSourceSolver(problem=phys)
@@ -144,6 +153,11 @@ if __name__ == "__main__":
              linear_source)):
         phys, ff, _ = solve(grid, "pwqd", source, "reflecting")
         patch[label] = integrate(ff, "max_func", lambda v, b, p: abs(v - phi(p)))
+    for label, grid in (("hexes", hex_grid(2)), ("tets", file_grid("pwqd_unit_cube_tets_4.vtu"))):
+        phys, ff, _ = solve(grid, "pwqd", quadratic_source, None,
+                            inflow=lambda p, omega, n: [quadratic_phi(p)] * n)
+        patch[label + "-inflow"] = integrate(ff, "max_func",
+                                             lambda v, b, p: abs(v - quadratic_phi(p)))
 
     # 2. Sine MMS convergence
     errors, times = {}, {}
