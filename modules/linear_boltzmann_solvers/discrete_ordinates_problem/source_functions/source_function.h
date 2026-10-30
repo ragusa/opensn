@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace opensn
 {
@@ -57,9 +58,20 @@ public:
                                     const std::vector<double>& phi,
                                     SourceFlags source_flags)
   {
-    AddPointSources(groupset, q, phi, source_flags);
-    AddVolumetricSources(groupset, q, phi, source_flags);
+    AddFixedExternalSources(groupset, q, source_flags);
   }
+
+  /**
+   * Adds the point and volumetric sources of the groupset's groups to the source moments when
+   * `source_flags` requests the fixed sources. The sources are evaluated once into a cache
+   * (one moment vector, built per groupset on first use) and the cache is reused until the
+   * problem's sources or its time change, so function-based sources, whose evaluation goes
+   * through a user callback at every node (and direction), are not re-evaluated for every
+   * right-hand-side assembly, Richardson iteration or final sweep.
+   */
+  void AddFixedExternalSources(const LBSGroupset& groupset,
+                               std::vector<double>& q,
+                               SourceFlags source_flags);
 
   /// Adds point sources to the source moments.
   void AddPointSources(const LBSGroupset& groupset,
@@ -74,7 +86,20 @@ public:
                             SourceFlags source_flags);
 
 protected:
+  /**
+   * Returns the cached fixed-source moments with the groupset's groups up to date, rebuilding
+   * the cache when the sources or the time changed since it was filled.
+   */
+  const std::vector<double>& FixedExternalSourceCache(const LBSGroupset& groupset);
+
   const LBSProblem& lbs_problem_;
+
+  /// Point and volumetric sources evaluated into moments, laid out like the phi vector.
+  std::vector<double> fixed_ext_src_cache_;
+  /// Per groupset: whether its groups of the cache are up to date.
+  std::vector<bool> fixed_ext_src_cache_valid_;
+  std::uint64_t fixed_ext_src_cache_version_ = 0;
+  double fixed_ext_src_cache_time_ = 0.0;
 
   bool apply_fixed_src_ = false;
   bool apply_wgs_scatter_src_ = false;

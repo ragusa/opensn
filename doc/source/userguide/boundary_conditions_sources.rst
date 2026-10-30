@@ -644,7 +644,10 @@ Important behavior:
   angular dependence lies in the span of those spherical harmonics. The
   example above needs ``scattering_order`` at least 1.
 * the callback is evaluated at the nodes of the selected cells, once per
-  quadrature direction.
+  quadrature direction. Like every point and volumetric source, the result is
+  cached and reused until the problem's sources or its time change, so the
+  callback cost is paid once per solve (once per time step for transient
+  problems), not once per iteration.
 * an angular function is mutually exclusive with ``group_strength``, ``func``
   and ``strength_function``, and is not supported by the response evaluator.
 

@@ -199,6 +199,12 @@ public:
   /// Constant accessor to the list of volumetric sources.
   const std::vector<std::shared_ptr<VolumetricSource>>& GetVolumetricSources() const;
 
+  /**
+   * Counter incremented every time the point or volumetric sources are set. Consumers that
+   * cache evaluated sources (the source function) compare it to rebuild their caches.
+   */
+  std::uint64_t GetFixedSourceVersion() const { return fixed_source_version_; }
+
   /// Clears all the boundary conditions from the solver.
   virtual void ClearBoundaries() = 0;
 
@@ -487,6 +493,7 @@ protected:
 
   std::vector<std::shared_ptr<PointSource>> point_sources_;
   std::vector<std::shared_ptr<VolumetricSource>> volumetric_sources_;
+  std::uint64_t fixed_source_version_ = 0;
 
   std::shared_ptr<Mesh> grid_;
   std::shared_ptr<SpatialDiscretization> discretization_ = nullptr;

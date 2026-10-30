@@ -243,6 +243,7 @@ LBSProblem::SetPointSources(const std::vector<std::shared_ptr<PointSource>>& sou
   }
   ValidateChange(point_sources_, new_sources);
   point_sources_ = std::move(new_sources);
+  ++fixed_source_version_;
 }
 
 void
@@ -276,6 +277,7 @@ LBSProblem::SetVolumetricSources(const std::vector<std::shared_ptr<VolumetricSou
   }
   ValidateChange(volumetric_sources_, new_sources);
   volumetric_sources_ = std::move(new_sources);
+  ++fixed_source_version_;
 }
 
 void

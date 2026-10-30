@@ -8,6 +8,7 @@
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/runtime.h"
 #include "framework/logging/log.h"
+#include "framework/utils/error.h"
 
 namespace opensn
 {
@@ -170,6 +171,60 @@ SourceFunction::DelayedFission(const PrecursorList& precursors,
                  nu_delayed_sigma_f[gp] * phi[gp];
 
   return value;
+}
+
+const std::vector<double>&
+SourceFunction::FixedExternalSourceCache(const LBSGroupset& groupset)
+{
+  const auto& phi = lbs_problem_.GetPhiOldLocal();
+  const auto version = lbs_problem_.GetFixedSourceVersion();
+  const auto time = lbs_problem_.GetTime();
+  const auto num_groupsets = lbs_problem_.GetNumGroupsets();
+
+  const bool stale = fixed_ext_src_cache_.size() != phi.size() or
+                     fixed_ext_src_cache_valid_.size() != num_groupsets or
+                     fixed_ext_src_cache_version_ != version or fixed_ext_src_cache_time_ != time;
+  if (stale)
+  {
+    fixed_ext_src_cache_.assign(phi.size(), 0.0);
+    fixed_ext_src_cache_valid_.assign(num_groupsets, false);
+    fixed_ext_src_cache_version_ = version;
+    fixed_ext_src_cache_time_ = time;
+  }
+
+  if (not fixed_ext_src_cache_valid_[groupset.id])
+  {
+    // The cache slots of this groupset's groups are zero: either freshly assigned or never
+    // written, since every groupset writes only its own groups.
+    AddPointSources(groupset, fixed_ext_src_cache_, phi, APPLY_FIXED_SOURCES);
+    AddVolumetricSources(groupset, fixed_ext_src_cache_, phi, APPLY_FIXED_SOURCES);
+    fixed_ext_src_cache_valid_[groupset.id] = true;
+  }
+  return fixed_ext_src_cache_;
+}
+
+void
+SourceFunction::AddFixedExternalSources(const LBSGroupset& groupset,
+                                        std::vector<double>& q,
+                                        const SourceFlags source_flags)
+{
+  if (not(source_flags & APPLY_FIXED_SOURCES) or lbs_problem_.GetOptions().use_src_moments)
+    return;
+  if (lbs_problem_.GetPointSources().empty() and lbs_problem_.GetVolumetricSources().empty())
+    return;
+
+  const auto& cache = FixedExternalSourceCache(groupset);
+  OpenSnLogicalErrorIf(cache.size() != q.size(),
+                       "SourceFunction::AddFixedExternalSources: size mismatch between the "
+                       "source cache and the destination vector.");
+
+  // Layout node*(G*M) + m*G + g: every (node, moment) block holds the G groups contiguously
+  const size_t num_groups = lbs_problem_.GetNumGroups();
+  const auto gs_i = groupset.first_group;
+  const auto gs_f = groupset.last_group;
+  for (size_t base = 0; base < q.size(); base += num_groups)
+    for (auto g = gs_i; g <= gs_f; ++g)
+      q[base + g] += cache[base + g];
 }
 
 void
