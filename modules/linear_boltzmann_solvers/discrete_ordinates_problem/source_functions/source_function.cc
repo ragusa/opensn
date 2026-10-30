@@ -319,16 +319,18 @@ SourceFunction::AddVolumetricSources(const LBSGroupset& groupset,
         {
           if (angular)
           {
+            // All directions of this node in one call, direction-major
+            const auto src = volumetric_source->EvaluateAngularDirections(
+              cell, nodes[i], omegas, num_groups, source_time);
             for (size_t n = 0; n < omegas.size(); ++n)
             {
-              const auto src = volumetric_source->EvaluateAngular(
-                cell, nodes[i], omegas[n], num_groups, source_time);
+              const double* src_n = src.data() + n * num_groups;
               for (unsigned int m = 0; m < num_moments; ++m)
               {
                 const double weight = d2m(n, m);
                 const auto dof_map = transport_view.MapDOF(i, m, 0);
                 for (auto g = gs_i; g <= gs_f; ++g)
-                  q[dof_map + g] += weight * src[g];
+                  q[dof_map + g] += weight * src_n[g];
               }
             }
             continue;

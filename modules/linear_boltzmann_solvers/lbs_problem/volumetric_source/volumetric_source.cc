@@ -205,6 +205,21 @@ VolumetricSource::EvaluateAngular(const Cell& cell,
   return (*angular_function_)(xyz, omega, num_groups);
 }
 
+std::vector<double>
+VolumetricSource::EvaluateAngularDirections(const Cell& cell,
+                                            const Vector3& xyz,
+                                            const std::vector<Vector3>& omegas,
+                                            const unsigned int num_groups,
+                                            const double /*time*/) const
+{
+  if (not angular_function_)
+    throw std::logic_error(
+      "VolumetricSource::EvaluateAngularDirections: this source is not angular.");
+  if (not IsSubscriber(cell))
+    return std::vector<double>(omegas.size() * num_groups, 0.0); // NOLINT
+  return angular_function_->EvaluateDirections(xyz, omegas, num_groups);
+}
+
 bool
 VolumetricSource::IsSubscriber(const Cell& cell) const
 {

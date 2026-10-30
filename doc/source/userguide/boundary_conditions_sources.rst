@@ -648,6 +648,29 @@ Important behavior:
   cached and reused until the problem's sources or its time change, so the
   callback cost is paid once per solve (once per time step for transient
   problems), not once per iteration.
+* with ``VectorSpatialAngularFunction(func, batched=True)`` the callback is
+  entered once per node with the list of all quadrature directions,
+  ``func(point, omegas, num_groups)``, and returns
+  ``len(omegas) * num_groups`` values, direction-major (all groups of the
+  first direction first). This removes the per-direction call overhead and
+  lets the body be vectorised with numpy:
+
+  .. code-block:: python
+
+     import numpy as np
+
+     def mms_source_batched(p, omegas, num_groups):
+         w = np.array([[o.x, o.y, o.z] for o in omegas])
+         sx, sy, sz = np.sin(np.pi * p.x), np.sin(np.pi * p.y), np.sin(np.pi * p.z)
+         cx, cy, cz = np.cos(np.pi * p.x), np.cos(np.pi * p.y), np.cos(np.pi * p.z)
+         grad = np.pi * np.array([cx * sy * sz, sx * cy * sz, sx * sy * cz])
+         q = w @ grad + (sigma_t - sigma_s) * sx * sy * sz
+         return np.repeat(q, num_groups).tolist()
+
+     src = VolumetricSource(
+         block_ids=[0],
+         angular_func=VectorSpatialAngularFunction(mms_source_batched, batched=True),
+     )
 * an angular function is mutually exclusive with ``group_strength``, ``func``
   and ``strength_function``, and is not supported by the response evaluator.
 

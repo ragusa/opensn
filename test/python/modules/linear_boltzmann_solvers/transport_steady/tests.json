@@ -2882,12 +2882,18 @@
   },
   {
     "file": "transport_3d_mms_angular_source.py",
-    "comment": "Angular volumetric source (manufactured solutions): linear patch test exact with reflecting boundaries; sine MMS second order for PWLD with the L2 error integrated against the exact solution",
+    "comment": "Angular volumetric source (manufactured solutions): linear patch test exact with reflecting boundaries, with the per-direction and the batched callback; sine MMS second order for PWLD with the L2 error integrated against the exact solution",
     "num_procs": 1,
     "checks": [
       {
         "type": "KeyValuePair",
         "key": "PatchMaxNodalErr-pwld=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwld-batched=",
         "goldvalue": 0.0,
         "abs_tol": 1e-09
       },
@@ -2907,12 +2913,18 @@
   },
   {
     "file": "transport_3d_mms_angular_source.py",
-    "comment": "Angular volumetric source (manufactured solutions): linear patch test exact with reflecting boundaries; sine MMS second order for PWLD with the L2 error integrated against the exact solution",
+    "comment": "Angular volumetric source (manufactured solutions): linear patch test exact with reflecting boundaries, with the per-direction and the batched callback; sine MMS second order for PWLD with the L2 error integrated against the exact solution",
     "num_procs": 4,
     "checks": [
       {
         "type": "KeyValuePair",
         "key": "PatchMaxNodalErr-pwld=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwld-batched=",
         "goldvalue": 0.0,
         "abs_tol": 1e-09
       },

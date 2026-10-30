@@ -156,6 +156,9 @@ WrapVolumetricSource(py::module& src)
         The source is projected onto the moments of the groupset quadrature; it is represented
         exactly when its angular dependence lies in the span of the spherical harmonics kept,
         i.e. up to the scattering order of the quadrature. Intended for manufactured solutions.
+        The function may be given in its batched form (one call per node for all directions,
+        see VectorSpatialAngularFunction). The evaluated source is cached until the problem's
+        sources or time change.
     strength_function: Callable
         Callable that returns the source strength for a given group (and optionally time). It must
         accept either `(group, time)` for transient problems or just `(group)` for steady-state.

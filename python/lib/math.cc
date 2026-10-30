@@ -302,13 +302,37 @@ WrapFunctors(py::module& math)
     >>> # Evaluate
     >>> f(Vector3(1.0, 2.0, 3.0), Vector3(1.0, 0.0, 0.0), 2)
     [2.0, 2.0]
+    >>>
+    >>> # Batched form: all directions of a point in one call, direction-major
+    >>> def foo_batched(point, omegas, n_groups):
+    ...     return [omega.x * point.y for omega in omegas for _ in range(n_groups)]
+    >>> g = VectorSpatialAngularFunction(foo_batched, batched=True)
+    >>> g(Vector3(1.0, 2.0, 3.0), Vector3(1.0, 0.0, 0.0), 2)
+    [2.0, 2.0]
     )"
   );
   vector_spatial_angular_function.def(
     py::init(
-      [](const std::function<std::vector<double>(const Vector3&, const Vector3&, int)>& func)
+      [](const py::function& func, bool batched)
       {
-        return std::make_shared<VectorSpatialAngularFunction>(func);
+        if (batched)
+        {
+          VectorSpatialAngularFunction::Batched f =
+            [func](const Vector3& xyz, const std::vector<Vector3>& omegas, std::size_t num_groups)
+          {
+            py::gil_scoped_acquire gil;
+            return func(xyz, omegas, num_groups).cast<std::vector<double>>();
+          };
+          return std::make_shared<VectorSpatialAngularFunction>(
+            VectorSpatialAngularFunction::FromBatched(f));
+        }
+        VectorSpatialAngularFunction::PerDirection f =
+          [func](const Vector3& xyz, const Vector3& omega, std::size_t num_groups)
+        {
+          py::gil_scoped_acquire gil;
+          return func(xyz, omega, num_groups).cast<std::vector<double>>();
+        };
+        return std::make_shared<VectorSpatialAngularFunction>(f);
       }
     ),
     R"(
@@ -316,10 +340,21 @@ WrapFunctors(py::module& math)
 
     Parameters
     ----------
-    func: Callable[[pyopensn.math.Vector3, pyopensn.math.Vector3, int], List[float]]
-        Referenced function of the position, the unit direction and the number of groups.
+    func: Callable
+        With ``batched=False`` (default), a function of the position, the unit direction and
+        the number of groups returning one value per group,
+        ``func(point, omega, num_groups) -> List[float]``. With ``batched=True``, a function of
+        the position, a list of unit directions and the number of groups returning
+        ``len(omegas) * num_groups`` values, direction-major (all groups of the first direction
+        first), ``func(point, omegas, num_groups) -> List[float]``. The batched form is entered
+        once per node instead of once per node and direction, which matters when the callback
+        cost dominates (manufactured-solution sources on fine meshes); the body can then be
+        vectorised with numpy.
+    batched: bool
+        Whether ``func`` has the batched signature. Default ``False``.
     )",
-    py::arg("func")
+    py::arg("func"),
+    py::arg("batched") = false
   );
   vector_spatial_angular_function.def(
     "__call__",

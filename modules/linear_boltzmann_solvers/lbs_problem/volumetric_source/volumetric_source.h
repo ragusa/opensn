@@ -72,6 +72,17 @@ public:
                                       unsigned int num_groups,
                                       double time) const;
 
+  /**
+   * Evaluate an angular source at one node for all `omegas` at once: `omegas.size() *
+   * num_groups` values, direction-major. Uses the batched form of the function when it has
+   * one, so a user callback is entered once per node instead of once per direction.
+   */
+  std::vector<double> EvaluateAngularDirections(const Cell& cell,
+                                                const Vector3& xyz,
+                                                const std::vector<Vector3>& omegas,
+                                                unsigned int num_groups,
+                                                double time) const;
+
   size_t GetNumLocalSubscribers() const { return num_local_subsribers_; }
   size_t GetNumGlobalSubsribers() const { return num_global_subscribers_; }
 

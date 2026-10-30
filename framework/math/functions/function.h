@@ -36,12 +36,35 @@ class VectorSpatialAngularFunction
   : public std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>
 {
 public:
+  using PerDirection =
+    std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>;
+  /**
+   * Batched form: given a position, a list of directions and the number of groups, return
+   * the values for every direction and group, direction-major (all groups of the first
+   * direction first).
+   */
+  using Batched =
+    std::function<std::vector<double>(const Vector3&, const std::vector<Vector3>&, std::size_t)>;
+
   VectorSpatialAngularFunction() = default;
-  VectorSpatialAngularFunction(
-    const std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>& src)
-    : std::function<std::vector<double>(const Vector3&, const Vector3&, std::size_t)>(src)
-  {
-  }
+  VectorSpatialAngularFunction(const PerDirection& src) : PerDirection(src) {}
+
+  /// Wraps a batched callable; the per-direction call evaluates it with a single direction.
+  static VectorSpatialAngularFunction FromBatched(const Batched& batched);
+
+  bool IsBatched() const { return static_cast<bool>(batched_); }
+
+  /**
+   * Evaluates the function for all `omegas` at once: one call of the batched callable when
+   * there is one, otherwise one per-direction call per entry. The result has
+   * `omegas.size() * num_groups` entries, direction-major.
+   */
+  std::vector<double> EvaluateDirections(const Vector3& xyz,
+                                         const std::vector<Vector3>& omegas,
+                                         std::size_t num_groups) const;
+
+private:
+  Batched batched_;
 };
 
 /// Base class for evaluating incoming angular fluxes given group and direction indices.

@@ -52,6 +52,12 @@ def linear_source(p, omega, n):
     return [streaming + SIGMA_A * linear_phi(p)] * n
 
 
+def linear_source_batched(p, omegas, n):
+    """Batched form of linear_source: all directions of a node in one call, direction-major."""
+    return [omega.x + 2.0 * omega.y + 3.0 * omega.z + SIGMA_A * linear_phi(p)
+            for omega in omegas for _ in range(n)]
+
+
 def sine_phi(p):
     return math.sin(math.pi * p.x) * math.sin(math.pi * p.y) * math.sin(math.pi * p.z)
 
@@ -71,11 +77,12 @@ if __name__ == "__main__":
     pquad = GLCProductQuadrature3DXYZ(n_polar=4, n_azimuthal=8, scattering_order=1)
     whole = RPPLogicalVolume(infx=True, infy=True, infz=True)
 
-    def solve(N, source, bc_type):
+    def solve(N, source, bc_type, batched=False):
         nodes = [i / N for i in range(N + 1)]
         grid = OrthogonalMeshGenerator(node_sets=[nodes, nodes, nodes]).Execute()
         grid.SetUniformBlockID(0)
-        src = VolumetricSource(block_ids=[0], angular_func=VectorSpatialAngularFunction(source))
+        src = VolumetricSource(block_ids=[0],
+                               angular_func=VectorSpatialAngularFunction(source, batched=batched))
         phys = DiscreteOrdinatesProblem(
             mesh=grid,
             num_groups=1,
@@ -110,9 +117,11 @@ if __name__ == "__main__":
         ffi.Execute()
         return ffi.GetValue()
 
-    # 1. Linear patch test
+    # 1. Linear patch test, with the per-direction and the batched callback forms
     phys, ff = solve(2, linear_source, "reflecting")
     patch_max_err = integrate(ff, "max_func", lambda v, b, p: abs(v - linear_phi(p)))
+    phys, ff = solve(2, linear_source_batched, "reflecting", batched=True)
+    patch_max_err_batched = integrate(ff, "max_func", lambda v, b, p: abs(v - linear_phi(p)))
 
     # 2. Sine MMS convergence
     errors = {}
@@ -124,6 +133,7 @@ if __name__ == "__main__":
 
     if rank == 0:
         print(f"PatchMaxNodalErr-pwld={patch_max_err:.3e}")
+        print(f"PatchMaxNodalErr-pwld-batched={patch_max_err_batched:.3e}")
         for N, e in errors.items():
             print(f"RelL2Err-pwld-{N}={e:.4e}")
         for a, b in ((4, 8), (8, 16)):
