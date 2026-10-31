@@ -94,6 +94,8 @@ public:
 
   /// Name of the spatial discretization ("pwld" or "pwqd").
   const std::string& GetSpatialDiscretizationType() const { return spatial_discretization_type_; }
+  /// Tying of the PWQD sub-mesh nodes ("least_squares" or "serendipity").
+  const std::string& GetPWQDTying() const { return pwqd_tying_; }
 
   bool UseFusedAAO() const { return options_.fused_aao_sweep; }
 
@@ -382,6 +384,8 @@ protected:
   const std::string sweep_type_;
   /// Spatial discretization selected at input: "pwld" (default) or "pwqd".
   const std::string spatial_discretization_type_;
+  /// Tying of the PWQD sub-mesh nodes: "least_squares" (default) or "serendipity".
+  const std::string pwqd_tying_;
   /// Time-absorption scale 1/(theta dt) of the current DSA operators (0 when steady).
   double dsa_time_absorption_scale_ = 0.0;
   /** @} */

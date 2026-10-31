@@ -3226,5 +3226,128 @@
       }
     ],
     "outfileprefix": "transport_2d_pwqd_mms_np2"
+  },
+  {
+    "file": "transport_pwqd_serendipity_mms.py",
+    "comment": "Manufactured solutions for the serendipity tying of PWQD: quadratic patch tests exact on hexahedra (reflecting and with the exact inflow), quadrilaterals and the polygon mix; sine MMS third order on hexahedra (pre-asymptotic 3.5 between 4^3 and 8^3, hence the wider tolerance) and quadrilaterals, with the serendipity error below the least-squares one (prototype: 0.59)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-hexes=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-quads=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-polygons=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-hexes-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-serendipity-hex4-hex8=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.6
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-serendipity-quad8-quad16=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-serendipity-quad16-quad32=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "ErrRatio-serendipity-over-lsq-hex8=",
+        "goldvalue": 0.6,
+        "abs_tol": 0.4
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "ErrRatio-serendipity-over-lsq-quad32=",
+        "goldvalue": 0.6,
+        "abs_tol": 0.4
+      }
+    ]
+  },
+  {
+    "file": "transport_pwqd_serendipity_mms.py",
+    "comment": "Manufactured solutions for the serendipity tying of PWQD: quadratic patch tests exact on hexahedra (reflecting and with the exact inflow), quadrilaterals and the polygon mix; sine MMS third order on hexahedra (pre-asymptotic 3.5 between 4^3 and 8^3, hence the wider tolerance) and quadrilaterals, with the serendipity error below the least-squares one (prototype: 0.59)",
+    "num_procs": 4,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-hexes=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-quads=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-polygons=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-serendipity-hexes-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-serendipity-hex4-hex8=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.6
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-serendipity-quad8-quad16=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-serendipity-quad16-quad32=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "ErrRatio-serendipity-over-lsq-hex8=",
+        "goldvalue": 0.6,
+        "abs_tol": 0.4
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "ErrRatio-serendipity-over-lsq-quad32=",
+        "goldvalue": 0.6,
+        "abs_tol": 0.4
+      }
+    ],
+    "outfileprefix": "transport_pwqd_serendipity_mms_np4"
   }
 ]

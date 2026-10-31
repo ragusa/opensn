@@ -1253,6 +1253,13 @@ WrapLBS(py::module& slv)
         quadratic-precision tying), which currently requires a 2D polygonal or
         3D polyhedral mesh, CPU execution (AAH or CBC sweeps) and a steady-state
         problem; MIP DSA uses the face-dependent penalty length with it.
+    pwqd_tying : str, default="least_squares"
+        Tying of the sub-mesh nodes of the PWQD basis. ``"least_squares"`` ties
+        them by quadratic least-squares fits; ``"serendipity"`` uses the
+        quadratic serendipity functions built on the PWL coordinates of the
+        cell (same unknowns and traces, more accurate on cells with planar
+        faces and simple vertices; least squares is used where that fails).
+        Only with ``spatial_discretization="pwqd"``.
     time_dependent : bool, default=False
         If true, the problem starts in time-dependent mode. Otherwise it starts in
         steady-state mode. Requires ``options.save_angular_flux=True`` and

@@ -440,9 +440,24 @@ employed.
   traces are the one-dimensional P2 Lagrange functions, and only the
   nodes on the spokes to the centroid are tied (by a least-squares
   quadratic through all unknowns of the cell); on a triangle the basis is
-  the P2 Lagrange element. In this version PWQD is available for 2D
-  polygonal and 3D polyhedral meshes with AAH or CBC sweeps on CPUs, for
-  steady-state source and eigenvalue problems.
+  the P2 Lagrange element. A second tying rule is available
+  (``pwqd_tying="serendipity"``): the tied nodes take the values of the
+  quadratic serendipity functions of Floater and Lai built on the PWL
+  coordinates :math:`\varphi_i` of the cell and on the vertex-star
+  coordinates :math:`\lambda_{i,j}` (the barycentric coordinates of the
+  simplex formed by vertex :math:`i` and its neighbours),
+  :math:`F_i = \varphi_i \lambda_{i,i}`,
+  :math:`F_{ij} = \varphi_i \lambda_{i,j} + \varphi_j \lambda_{j,i}`,
+  :math:`L_i = F_i - \tfrac12 \sum_{j \sim i} F_{ij}`, :math:`L_{ij} = 2 F_{ij}`.
+  These functions are nodal, reproduce every quadratic and are piecewise
+  quadratic on the side simplices, so the tied element is exactly the
+  serendipity element; it has the same unknowns and the same face-local
+  traces as the least-squares tying and is more accurate on cells with
+  planar faces and simple vertices. Where a face is not planar, a vertex
+  is not simple or its star is degenerate (a hanging node), the
+  least-squares weights are used for that face or cell. In this version
+  PWQD is available for 2D polygonal and 3D polyhedral meshes with AAH or
+  CBC sweeps on CPUs, for steady-state source and eigenvalue problems.
 
 
 References

@@ -61,6 +61,14 @@ DiscreteOrdinatesProblem::GetInputParameters()
                               "3D polyhedral meshes, CPU sweeps).");
   params.ConstrainParameterRange("spatial_discretization",
                                  AllowableRangeList::New({"pwld", "pwqd"}));
+  params.AddOptionalParameter("pwqd_tying",
+                              "least_squares",
+                              "Tying of the sub-mesh nodes of the PWQD basis: \"least_squares\" "
+                              "(quadratic least-squares fits) or \"serendipity\" (quadratic "
+                              "serendipity functions on PWL coordinates, falling back to least "
+                              "squares on non-planar faces and non-simple vertices).");
+  params.ConstrainParameterRange("pwqd_tying",
+                                 AllowableRangeList::New({"least_squares", "serendipity"}));
   params.AddOptionalParameter("time_dependent",
                               false,
                               "If true, initializes the problem in time-dependent mode. "
@@ -127,7 +135,8 @@ DiscreteOrdinatesProblem::Create(const ParameterBlock& params)
 DiscreteOrdinatesProblem::DiscreteOrdinatesProblem(const InputParameters& params)
   : LBSProblem(params),
     sweep_type_(params.GetParamValue<std::string>("sweep_type")),
-    spatial_discretization_type_(params.GetParamValue<std::string>("spatial_discretization"))
+    spatial_discretization_type_(params.GetParamValue<std::string>("spatial_discretization")),
+    pwqd_tying_(params.GetParamValue<std::string>("pwqd_tying"))
 {
   // The configuration (time-dependent mode, adjoint, uncollided flux, ...) is validated by
   // ValidateConfiguration() in BuildRuntime(), once the object is fully constructed. The rules are
@@ -556,7 +565,11 @@ void
 DiscreteOrdinatesProblem::CheckPWQD(std::vector<std::string>& errors) const
 {
   if (spatial_discretization_type_ != "pwqd")
+  {
+    if (pwqd_tying_ != "least_squares")
+      errors.emplace_back("pwqd_tying requires spatial_discretization=\"pwqd\".");
     return;
+  }
 
   // The quadratic basis is implemented for 2D polygonal and 3D polyhedral cells, CPU sweeps (AAH
   // and CBC) and the steady-state source and eigenvalue solvers only.
@@ -666,7 +679,10 @@ void
 DiscreteOrdinatesProblem::InitializeSpatialDiscretization()
 {
   if (spatial_discretization_type_ == "pwqd")
-    discretization_ = PieceWiseQuadraticDiscontinuous::New(grid_);
+    discretization_ = PieceWiseQuadraticDiscontinuous::New(
+      grid_,
+      QuadratureOrder::FOURTH,
+      pwqd_tying_ == "serendipity" ? PWQDTying::SERENDIPITY : PWQDTying::LEAST_SQUARES);
   else
     discretization_ = PieceWiseLinearDiscontinuous::New(grid_);
   LBSProblem::InitializeSpatialDiscretization();
