@@ -15,8 +15,10 @@ volume-weighted L2 norm of the cell-average error, relative to the peak cell ave
 reference. Both bases preserve the limit (no locking): the errors are the discretization error of
 the limit solution at h = 1/4. Independent reference values at this configuration from the
 Beyond_PWLD prototype (RESULTS.md, "Thick limit under refinement", 2026-10-28): PWQD 0.0125
-(max) / 0.0057 (L2), PWLD 0.0724 / 0.0625.
-SDM: PWLD and PWQD; AAH or CBC sweeps (PWQD_SWEEP_TYPE).
+(max) / 0.0057 (L2), PWLD 0.0724 / 0.0625, and for the serendipity tying (the prototype's
+PWL_Serendipity2, "pwqd-s" below) 0.0124 / 0.0056.
+SDM: PWLD, PWQD with least-squares tying and PWQD with serendipity tying; AAH or CBC sweeps
+(PWQD_SWEEP_TYPE).
 """
 
 import math
@@ -95,7 +97,9 @@ if __name__ == "__main__":
                                                      zmin=k * h, zmax=(k + 1) * h))
 
     results = {}
-    for sdm in ("pwld", "pwqd"):
+    variants = {"pwld": ("pwld", "least_squares"), "pwqd": ("pwqd", "least_squares"),
+                "pwqd-s": ("pwqd", "serendipity")}
+    for label, (sdm, tying) in variants.items():
         phys = DiscreteOrdinatesProblem(
             mesh=grid,
             num_groups=1,
@@ -119,6 +123,7 @@ if __name__ == "__main__":
                 for n in ("xmin", "xmax", "ymin", "ymax", "zmin", "zmax")
             ],
             spatial_discretization=sdm,
+            pwqd_tying=tying,
             sweep_type=sweep_type,
         )
         solver = SteadyStateSourceSolver(problem=phys)
@@ -137,11 +142,11 @@ if __name__ == "__main__":
 
         err_max = max(abs(a - r) for a, r in zip(avgs, ref)) / ref_peak
         err_l2 = math.sqrt(sum((a - r) ** 2 for a, r in zip(avgs, ref)) / len(ref)) / ref_peak
-        results[sdm] = (err_max, err_l2, max(avgs))
+        results[label] = (err_max, err_l2, max(avgs))
 
     if rank == 0:
         print(f"Reference peak cell average = {ref_peak:.6e}")
-        for sdm in ("pwld", "pwqd"):
+        for sdm in variants:
             err_max, err_l2, peak = results[sdm]
             print(f"Peak-cell-avg-{sdm}={peak:.6e}")
             print(f"RelMaxCellAvgErr-{sdm}={err_max:.6e}")

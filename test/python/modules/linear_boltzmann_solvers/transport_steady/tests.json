@@ -2033,7 +2033,7 @@
   },
   {
     "file": "transport_3d_pwqd_thick_limit.py",
-    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration",
+    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD (both tyings) and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration",
     "num_procs": 1,
     "checks": [
       {
@@ -2059,6 +2059,18 @@
         "key": "RelL2CellAvgErr-pwld=",
         "goldvalue": 0.0625,
         "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwqd-s=",
+        "goldvalue": 0.0124,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwqd-s=",
+        "goldvalue": 0.0056,
+        "abs_tol": 0.0005
       }
     ]
   },
@@ -2110,7 +2122,7 @@
   },
   {
     "file": "transport_3d_pwqd_thick_limit.py",
-    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration",
+    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD (both tyings) and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration",
     "num_procs": 4,
     "checks": [
       {
@@ -2136,6 +2148,18 @@
         "key": "RelL2CellAvgErr-pwld=",
         "goldvalue": 0.0625,
         "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwqd-s=",
+        "goldvalue": 0.0124,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwqd-s=",
+        "goldvalue": 0.0056,
+        "abs_tol": 0.0005
       }
     ],
     "outfileprefix": "transport_3d_pwqd_thick_limit_np4"
@@ -2194,7 +2218,7 @@
   },
   {
     "file": "transport_3d_pwqd_thick_limit.py",
-    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration (CBC sweeps)",
+    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD (both tyings) and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration (CBC sweeps)",
     "num_procs": 1,
     "checks": [
       {
@@ -2220,6 +2244,18 @@
         "key": "RelL2CellAvgErr-pwld=",
         "goldvalue": 0.0625,
         "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwqd-s=",
+        "goldvalue": 0.0124,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwqd-s=",
+        "goldvalue": 0.0056,
+        "abs_tol": 0.0005
       }
     ],
     "env": {
@@ -2281,7 +2317,7 @@
   },
   {
     "file": "transport_3d_pwqd_thick_limit.py",
-    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration (CBC sweeps)",
+    "comment": "Thick diffusion limit (eps = 1e-4, 4^3 hexes) for PWQD (both tyings) and PWLD vs the analytic limit; gold values are the Beyond_PWLD prototype's errors at this configuration (CBC sweeps)",
     "num_procs": 4,
     "checks": [
       {
@@ -2307,6 +2343,18 @@
         "key": "RelL2CellAvgErr-pwld=",
         "goldvalue": 0.0625,
         "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelMaxCellAvgErr-pwqd-s=",
+        "goldvalue": 0.0124,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RelL2CellAvgErr-pwqd-s=",
+        "goldvalue": 0.0056,
+        "abs_tol": 0.0005
       }
     ],
     "outfileprefix": "transport_3d_pwqd_thick_limit_cbc_np4",
