@@ -6,6 +6,7 @@
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_continuous.h"
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_discontinuous.h"
 #include "framework/math/spatial_discretization/cell_mappings/finite_element/piecewise_quadratic/piecewise_quadratic_polyhedron_mapping.h"
+#include "framework/math/spatial_discretization/cell_mappings/finite_element/piecewise_quadratic/piecewise_quadratic_polygon_mapping.h"
 #include "framework/math/spatial_discretization/spatial_discretization.h"
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/mesh/mesh/grid_vtk_utils.h"
@@ -259,49 +260,60 @@ namespace
 {
 
 /**
- * For the quadratic (PWQD) export every polyhedron is written as its side tetrahedra, each a
- * VTK_QUADRATIC_TETRA whose 10 nodes carry the values of the PWQD field at the sub-mesh nodes
- * (vertices, edge midpoints, and the tied face and cell nodes obtained from the tying operator),
- * so the exported field is exactly the quadratic finite element field. Returns, for the
- * reference P2 tetrahedron, the reference node index of each VTK node: corners 0..3, then the
- * midpoints of the edges (0,1), (1,2), (0,2), (0,3), (1,3), (2,3).
+ * For the quadratic (PWQD) export every cell is written as its side simplices (tetrahedra in
+ * 3D, triangles in 2D), each a VTK_QUADRATIC_TETRA or VTK_QUADRATIC_TRIANGLE whose nodes carry
+ * the values of the PWQD field at the sub-mesh nodes (vertices, edge midpoints, and the tied
+ * face and cell nodes obtained from the tying operator), so the exported field is exactly the
+ * quadratic finite element field. Returns, for the side reference element of the tying, the
+ * position within SubmeshTying::GetSideReferenceNodes() of each VTK node: the corners, then the
+ * midpoints of the edges (0,1), (1,2), (0,2) and, for a tetrahedron, (0,3), (1,3), (2,3).
  */
-std::array<size_t, 10>
-VtkQuadraticTetraNodeOrder(const TetLagrangeReference& ref)
+std::vector<size_t>
+VtkQuadraticSimplexNodeOrder(const SubmeshTying& tying)
 {
-  const auto& nodes = ref.GetNodes();
-  std::array<size_t, 10> order{};
-  auto find = [&nodes](unsigned int a, unsigned int b)
+  const auto& nodes = tying.GetReferenceElement().GetNodes();
+  const auto& side_ref = tying.GetSideReferenceNodes();
+  auto find = [&nodes, &side_ref](unsigned int a, unsigned int b)
   {
-    for (size_t j = 0; j < nodes.size(); ++j)
-      if ((a == b and nodes[j][a] == 2) or (a != b and nodes[j][a] == 1 and nodes[j][b] == 1))
-        return j;
-    throw std::logic_error("VtkQuadraticTetraNodeOrder: node not found");
+    for (size_t k = 0; k < side_ref.size(); ++k)
+    {
+      const auto& n = nodes[side_ref[k]];
+      if ((a == b and n[a] == 2) or (a != b and n[a] == 1 and n[b] == 1))
+        return k;
+    }
+    throw std::logic_error("VtkQuadraticSimplexNodeOrder: node not found");
   };
-  for (unsigned int c = 0; c < 4; ++c)
-    order[c] = find(c, c);
-  const std::array<std::pair<unsigned int, unsigned int>, 6> edges = {
-    std::pair{0u, 1u}, {1u, 2u}, {0u, 2u}, {0u, 3u}, {1u, 3u}, {2u, 3u}};
-  for (size_t e = 0; e < 6; ++e)
-    order[4 + e] = find(edges[e].first, edges[e].second);
+  const bool triangle = tying.GetDimension() == 2;
+  const unsigned int num_corners = triangle ? 3 : 4;
+  std::vector<std::pair<unsigned int, unsigned int>> edges = {{0u, 1u}, {1u, 2u}, {0u, 2u}};
+  if (not triangle)
+    edges.insert(edges.end(), {{0u, 3u}, {1u, 3u}, {2u, 3u}});
+  std::vector<size_t> order;
+  order.reserve(num_corners + edges.size());
+  for (unsigned int c = 0; c < num_corners; ++c)
+    order.push_back(find(c, c));
+  for (const auto& e : edges)
+    order.push_back(find(e.first, e.second));
   return order;
 }
 
-const PieceWiseQuadraticPolyhedronMapping&
-QuadraticMapping(const SpatialDiscretization& sdm, const Cell& cell)
+const SubmeshTying&
+QuadraticTying(const SpatialDiscretization& sdm, const Cell& cell)
 {
-  const auto* mapping =
-    dynamic_cast<const PieceWiseQuadraticPolyhedronMapping*>(&sdm.GetCellMapping(cell));
-  if (mapping == nullptr)
-    throw std::logic_error("FieldFunctionGridBased: quadratic export requires PWQD cell mappings");
-  return *mapping;
+  const auto& mapping = sdm.GetCellMapping(cell);
+  if (const auto* m = dynamic_cast<const PieceWiseQuadraticPolyhedronMapping*>(&mapping))
+    return m->GetTying();
+  if (const auto* m = dynamic_cast<const PieceWiseQuadraticPolygonMapping*>(&mapping))
+    return m->GetTying();
+  throw std::logic_error("FieldFunctionGridBased: quadratic export requires PWQD cell mappings");
 }
 
-/// The side-tetrahedron sub-mesh of all local cells as VTK quadratic tetrahedra.
+/// The side-simplex sub-mesh of all local cells as VTK quadratic tetrahedra or triangles. The
+/// VTK node order of the side reference element is returned in `order` (empty without cells).
 vtkNew<vtkUnstructuredGrid>
 PrepareVtkQuadraticSubmeshGrid(const Mesh& grid,
                                const SpatialDiscretization& sdm,
-                               const std::array<size_t, 10>& order)
+                               std::vector<size_t>& order)
 {
   vtkNew<vtkUnstructuredGrid> ugrid;
   vtkNew<vtkPoints> points;
@@ -311,22 +323,27 @@ PrepareVtkQuadraticSubmeshGrid(const Mesh& grid,
   block_array->SetName("Block");
   partition_id_array->SetName("Partition");
 
+  order.clear();
   vtkIdType node_counter = 0;
+  std::vector<vtkIdType> ids;
   for (const auto& cell : grid.GetLocalCells())
   {
-    const auto& tying = QuadraticMapping(sdm, *cell).GetTying();
+    const auto& tying = QuadraticTying(sdm, *cell);
+    if (order.empty())
+      order = VtkQuadraticSimplexNodeOrder(tying);
+    const int vtk_type = tying.GetDimension() == 2 ? VTK_QUADRATIC_TRIANGLE : VTK_QUADRATIC_TETRA;
     const auto& X = tying.GetSubNodeLocations();
+    ids.resize(order.size());
     for (size_t s = 0; s < tying.GetNumSides(); ++s)
     {
       const auto& side_nodes = tying.GetSideNodes(s);
-      std::array<vtkIdType, 10> ids{};
-      for (size_t k = 0; k < 10; ++k)
+      for (size_t k = 0; k < order.size(); ++k)
       {
         const auto& x = X[side_nodes[order[k]]];
         points->InsertPoint(node_counter, x.x, x.y, x.z);
         ids[k] = node_counter++;
       }
-      ugrid->InsertNextCell(VTK_QUADRATIC_TETRA, 10, ids.data());
+      ugrid->InsertNextCell(vtk_type, static_cast<int>(order.size()), ids.data());
       block_array->InsertNextValue(static_cast<int>(cell->block_id));
       partition_id_array->InsertNextValue(cell->partition_id);
     }
@@ -364,7 +381,7 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
   // Get grid
   const auto& grid = master_ff.discretization_->GetGrid();
 
-  // Quadratic discretizations are exported on their side-tetrahedron sub-mesh
+  // Quadratic discretizations are exported on their side-simplex sub-mesh
   const bool quadratic = master_ff.discretization_->GetType() ==
                          SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS;
   if (quadratic)
@@ -373,8 +390,8 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
           SpatialDiscretizationType::PIECEWISE_QUADRATIC_DISCONTINUOUS)
         throw std::logic_error(fname + ": Cannot mix quadratic and non-quadratic field functions.");
 
-  // VTK node order of the P2 reference tetrahedron (the same for every PWQD cell)
-  const auto vtk_order = VtkQuadraticTetraNodeOrder(TetLagrangeReference(2));
+  // VTK node order of the side reference element (the same for every PWQD cell of the grid)
+  std::vector<size_t> vtk_order;
   auto ugrid = quadratic
                  ? PrepareVtkQuadraticSubmeshGrid(*grid, *master_ff.discretization_, vtk_order)
                  : PrepareVtkUnstructuredGrid(grid);
@@ -408,7 +425,7 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
         if (quadratic)
         {
           // Values at the sub-mesh nodes: T times the cell's nodal values
-          const auto& tying = QuadraticMapping(*sdm, *cell).GetTying();
+          const auto& tying = QuadraticTying(*sdm, *cell);
           const auto& T = tying.GetTyingOperator();
           if (tying.GetDegree() != 2)
             throw std::logic_error(fname + ": quadratic export expects degree-2 cell mappings.");
@@ -422,8 +439,8 @@ FieldFunctionGridBased::ExportMultipleToPVTU(
           for (size_t s = 0; s < tying.GetNumSides(); ++s)
           {
             const auto& side_nodes = tying.GetSideNodes(s);
-            for (size_t k = 0; k < 10; ++k)
-              point_array->InsertNextValue(sub[side_nodes[vtk_order[k]]]);
+            for (const auto k : vtk_order)
+              point_array->InsertNextValue(sub[side_nodes[k]]);
           }
           continue;
         }

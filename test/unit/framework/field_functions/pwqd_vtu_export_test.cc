@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 The OpenSn Authors <https://open-sn.github.io/opensn/>
 // SPDX-License-Identifier: MIT
 
-// The PVTU export of a PWQD field function writes the side-tetrahedron sub-mesh as VTK
-// quadratic tetrahedra carrying the field values at the sub-mesh nodes. A quadratic polynomial
-// is represented exactly by PWQD on planar-faced cells, so after export every point value must
-// equal the polynomial at the point's coordinates: this checks the node ordering of the VTK
-// cells and the tied-node evaluation independently of the solver.
+// The PVTU export of a PWQD field function writes the side-simplex sub-mesh as VTK quadratic
+// tetrahedra (3D) or triangles (2D) carrying the field values at the sub-mesh nodes. A quadratic
+// polynomial is represented exactly by PWQD on planar-faced cells, so after export every point
+// value must equal the polynomial at the point's coordinates: this checks the node ordering of the
+// VTK cells and the tied-node evaluation independently of the solver.
 
 #include "test/unit/common/mesh_builders.h"
 #include "framework/field_functions/field_function_grid_based.h"
@@ -76,6 +76,56 @@ TEST(PWQDVtuExport, QuadraticFieldIsExact)
   ASSERT_EQ(ugrid->GetNumberOfPoints(), 24 * 8 * 10);
   for (vtkIdType c = 0; c < ugrid->GetNumberOfCells(); ++c)
     EXPECT_EQ(ugrid->GetCellType(c), VTK_QUADRATIC_TETRA);
+
+  auto* arr = vtkDoubleArray::SafeDownCast(ugrid->GetPointData()->GetArray("phiUnknown_0"));
+  ASSERT_NE(arr, nullptr);
+  double x[3];
+  for (vtkIdType p = 0; p < ugrid->GetNumberOfPoints(); ++p)
+  {
+    ugrid->GetPoint(p, x);
+    EXPECT_NEAR(arr->GetValue(p), Quadratic(x[0], x[1], x[2]), 1e-12) << "point " << p;
+  }
+
+  fs::remove_all(dir);
+}
+
+TEST(PWQDVtuExport, QuadraticFieldIsExact2D)
+{
+  if (opensn::mpi_comm.size() != 1)
+    return;
+
+  auto grid = BuildSquareMesh(1.0, 2, 0.0);
+  auto sdm = PieceWiseQuadraticDiscontinuous::New(grid);
+  const auto& uk_man = sdm->UNITARY_UNKNOWN_MANAGER;
+
+  std::vector<double> values(sdm->GetNumLocalDOFs(uk_man), 0.0);
+  for (const auto& cell : grid->GetLocalCells())
+  {
+    const auto& X = sdm->GetCellMapping(*cell).GetNodeLocations();
+    for (size_t n = 0; n < X.size(); ++n)
+      values[sdm->MapDOFLocal(*cell, n, uk_man, 0, 0)] = Quadratic(X[n].x, X[n].y, X[n].z);
+  }
+  std::shared_ptr<SpatialDiscretization> sdm_base = sdm;
+  auto ff = std::make_shared<FieldFunctionGridBased>("phi", sdm_base, uk_man.unknowns.front());
+  ff->UpdateFieldVector(values);
+
+  const fs::path dir =
+    fs::temp_directory_path() / ("opensn_pwqd_export2d_" + std::to_string(getpid()));
+  fs::create_directories(dir);
+  const std::string base = (dir / "phi").string();
+  FieldFunctionGridBased::ExportMultipleToPVTU(base, {ff});
+
+  auto reader = vtkSmartPointer<vtkXMLUnstructuredGridReader>::New();
+  reader->SetFileName((base + "_0.vtu").c_str());
+  reader->Update();
+  auto* ugrid = reader->GetOutput();
+  ASSERT_NE(ugrid, nullptr);
+
+  // 4 side triangles per quadrilateral, 6 points each
+  ASSERT_EQ(ugrid->GetNumberOfCells(), 4 * 4);
+  ASSERT_EQ(ugrid->GetNumberOfPoints(), 4 * 4 * 6);
+  for (vtkIdType c = 0; c < ugrid->GetNumberOfCells(); ++c)
+    EXPECT_EQ(ugrid->GetCellType(c), VTK_QUADRATIC_TRIANGLE);
 
   auto* arr = vtkDoubleArray::SafeDownCast(ugrid->GetPointData()->GetArray("phiUnknown_0"));
   ASSERT_NE(arr, nullptr);
