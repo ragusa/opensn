@@ -3,6 +3,7 @@
 
 #include "framework/math/spatial_discretization/finite_element/piecewise_quadratic/piecewise_quadratic_discontinuous.h"
 #include "framework/math/spatial_discretization/cell_mappings/finite_element/piecewise_quadratic/piecewise_quadratic_polyhedron_mapping.h"
+#include "framework/math/spatial_discretization/cell_mappings/finite_element/piecewise_quadratic/piecewise_quadratic_polygon_mapping.h"
 #include "framework/mesh/mesh/mesh.h"
 #include <stdexcept>
 
@@ -25,13 +26,20 @@ PieceWiseQuadraticDiscontinuous::MakePWQDFactory(PieceWiseQuadraticDiscontinuous
   // PieceWiseLinearBase constructor has already initialized (grid and quadratures).
   return [&self](const Cell& cell) -> std::unique_ptr<CellMapping>
   {
-    if (cell.GetType() != CellType::POLYHEDRON)
-      throw std::invalid_argument(
-        "PieceWiseQuadraticDiscontinuous (PWQD): only polyhedral (3D) cells are supported in this "
-        "version; cell " +
-        std::to_string(cell.global_id) + " is not a polyhedron");
-    return std::make_unique<PieceWiseQuadraticPolyhedronMapping>(
-      cell, self.grid_, self.tet_quad_order_arbitrary_, self.tri_quad_order_arbitrary_);
+    switch (cell.GetType())
+    {
+      case CellType::POLYGON:
+        return std::make_unique<PieceWiseQuadraticPolygonMapping>(
+          cell, self.grid_, self.tri_quad_order_arbitrary_, self.line_quad_order_arbitrary_);
+      case CellType::POLYHEDRON:
+        return std::make_unique<PieceWiseQuadraticPolyhedronMapping>(
+          cell, self.grid_, self.tet_quad_order_arbitrary_, self.tri_quad_order_arbitrary_);
+      default:
+        throw std::invalid_argument(
+          "PieceWiseQuadraticDiscontinuous (PWQD): only polygonal (2D) and polyhedral (3D) cells "
+          "are supported in this version; cell " +
+          std::to_string(cell.global_id) + " is neither");
+    }
   };
 }
 

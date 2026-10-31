@@ -448,8 +448,18 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
                                 " reproduces degree " + std::to_string(weights.GetMaxDegree()) +
                                 " < p = " + std::to_string(p));
 
+  const CellType cell_type = cell.GetType();
+  if (cell_type != CellType::POLYHEDRON and cell_type != CellType::POLYGON)
+    throw std::invalid_argument("SubmeshTying: only polygon (2D) and polyhedron (3D) cells are "
+                                "supported; cell " +
+                                std::to_string(cell.global_id) + " is neither");
+  dim_ = (cell_type == CellType::POLYHEDRON) ? 3 : 2;
+
   const size_t n_v = cell.vertex_ids.size();
   const size_t n_f = cell.faces.size();
+  // A polygon face is an edge (two vertices, one cell edge, one side triangle)
+  auto num_face_edges = [this](const CellFace& face)
+  { return (dim_ == 3) ? face.vertex_ids.size() : size_t{1}; };
 
   std::map<uint64_t, int> vloc;
   for (size_t i = 0; i < n_v; ++i)
@@ -461,7 +471,7 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
   for (const auto& face : cell.faces)
   {
     const size_t ne = face.vertex_ids.size();
-    for (size_t e = 0; e < ne; ++e)
+    for (size_t e = 0; e < num_face_edges(face); ++e)
     {
       const uint64_t a = face.vertex_ids[e];
       const uint64_t b = face.vertex_ids[(e + 1) % ne];
@@ -501,7 +511,7 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
     for (const auto vid : face.vertex_ids)
       face_dofs_[f].push_back(vloc.at(vid));
     if (p >= 2)
-      for (size_t e = 0; e < ne; ++e)
+      for (size_t e = 0; e < num_face_edges(face); ++e)
       {
         const uint64_t a = face.vertex_ids[e];
         const uint64_t b = face.vertex_ids[(e + 1) % ne];
@@ -510,9 +520,15 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
       }
   }
 
-  // Sub-mesh nodes: enumerate the reference nodes of every side tet
+  // Sub-mesh nodes: enumerate the reference nodes of every side. A polyhedron side is a tet
+  // (v_k, x_f, v_{k+1}, x_c) using every reference node; a polygon side is the triangle
+  // (v_k, v_{k+1}, x_c) using the nodes of the zeta = 0 face of the reference tet.
   const auto& ref_nodes = ref_.GetNodes();
-  const size_t n_tet_nodes = ref_nodes.size();
+  side_reference_nodes_.clear();
+  for (size_t j = 0; j < ref_nodes.size(); ++j)
+    if (dim_ == 3 or ref_nodes[j][3] == 0)
+      side_reference_nodes_.push_back(j);
+  const size_t n_side_nodes = side_reference_nodes_.size();
   std::map<std::vector<SupportEntry>, size_t> key_to_index;
   std::vector<std::vector<SupportEntry>> sub_node_keys;
 
@@ -520,23 +536,36 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
   {
     const auto& face = cell.faces[f];
     const size_t ne = face.vertex_ids.size();
-    for (size_t e = 0; e < ne; ++e)
+    for (size_t e = 0; e < num_face_edges(face); ++e)
     {
       const uint64_t v0 = face.vertex_ids[e];
       const uint64_t v1 = face.vertex_ids[(e + 1) % ne];
-      const std::array<Vector3, 4> X = {
-        grid.GlobalVertex(v0), face.centroid, grid.GlobalVertex(v1), cell.centroid};
-      const std::array<SupportEntry, 4> subv = {SupportEntry{0, vloc.at(v0), 0},
-                                                SupportEntry{1, static_cast<int>(f), 0},
-                                                SupportEntry{0, vloc.at(v1), 0},
-                                                SupportEntry{2, 0, 0}};
+      std::array<Vector3, 4> X;
+      std::array<SupportEntry, 4> subv;
+      if (dim_ == 3)
+      {
+        X = {grid.GlobalVertex(v0), face.centroid, grid.GlobalVertex(v1), cell.centroid};
+        subv = {SupportEntry{0, vloc.at(v0), 0},
+                SupportEntry{1, static_cast<int>(f), 0},
+                SupportEntry{0, vloc.at(v1), 0},
+                SupportEntry{2, 0, 0}};
+      }
+      else
+      {
+        // The fourth entry is never used: the zeta = 0 nodes have a[3] == 0
+        X = {grid.GlobalVertex(v0), grid.GlobalVertex(v1), cell.centroid, cell.centroid};
+        subv = {SupportEntry{0, vloc.at(v0), 0},
+                SupportEntry{0, vloc.at(v1), 0},
+                SupportEntry{2, 0, 0},
+                SupportEntry{2, 0, 0}};
+      }
 
       side_face_.push_back(f);
       side_edge_.push_back(e);
-      std::vector<size_t> nodes_of_side(n_tet_nodes);
-      for (size_t j = 0; j < n_tet_nodes; ++j)
+      std::vector<size_t> nodes_of_side(n_side_nodes);
+      for (size_t j = 0; j < n_side_nodes; ++j)
       {
-        const auto& a = ref_nodes[j];
+        const auto& a = ref_nodes[side_reference_nodes_[j]];
         std::vector<SupportEntry> key;
         Vector3 x{0.0, 0.0, 0.0};
         for (unsigned int i = 0; i < 4; ++i)
@@ -619,9 +648,10 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
     all_dofs[j] = static_cast<int>(j);
   const auto all_sorted = sorted_by_key(all_dofs);
 
+  // Face frames are needed for the face-tied nodes, which exist only in 3D
   std::vector<FaceFrame> frames;
-  frames.reserve(n_f);
-  for (size_t f = 0; f < n_f; ++f)
+  frames.reserve(dim_ == 3 ? n_f : 0);
+  for (size_t f = 0; f < n_f and dim_ == 3; ++f)
   {
     auto vids = cell.faces[f].vertex_ids;
     std::sort(vids.begin(), vids.end());
@@ -678,8 +708,8 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
   side_tying_.reserve(side_nodes_.size());
   for (const auto& nodes_of_side : side_nodes_)
   {
-    DenseMatrix<double> Ts(n_tet_nodes, N, 0.0);
-    for (size_t t = 0; t < n_tet_nodes; ++t)
+    DenseMatrix<double> Ts(n_side_nodes, N, 0.0);
+    for (size_t t = 0; t < n_side_nodes; ++t)
       for (size_t j = 0; j < N; ++j)
         Ts(t, j) = T_(nodes_of_side[t], j);
     side_tying_.push_back(std::move(Ts));

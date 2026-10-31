@@ -171,21 +171,26 @@ enum class SubmeshNodeKind : int
 };
 
 /**
- * The constrained sub-mesh element of a polyhedral cell: P_p Lagrange on OpenSn's side tetrahedra
- * (v_k, x_f, v_{k+1}, x_c) with the non-real nodes tied to the real nodes (the dofs) by fixed
- * weights. PWLD is p = 1 with average weights; PWQD is p = 2 with least-squares weights.
+ * The constrained sub-mesh element of a polyhedral or polygonal cell: P_p Lagrange on OpenSn's
+ * side tetrahedra (v_k, x_f, v_{k+1}, x_c) of a polyhedron, or on the side triangles
+ * (v_k, v_{k+1}, x_c) of a polygon, with the non-real nodes tied to the real nodes (the dofs) by
+ * fixed weights. PWLD is p = 1 with average weights; PWQD is p = 2 with least-squares weights.
  *
- * Sub-mesh nodes are identified across side tets by the multiset of sub-vertices that support them
+ * Sub-mesh nodes are identified across sides by the multiset of sub-vertices that support them
  * (cell vertices 'V', face centroids 'F', the cell centroid 'C'). Node classes: REAL (only 'V'
  * support: a cell vertex, or for p = 2 a cell-edge midpoint), FACE_TIED ('F' in the support and no
  * 'C'), CELL_TIED ('C' in the support). Dofs are the real nodes, ordered cell vertices (in
  * cell.vertex_ids order) then edge midpoints (in order of first appearance walking the face loops).
+ * In 2D the faces are the edges, their midpoints are real nodes and there are no face-tied nodes.
  *
  * Side s of the cell is the side tet of face GetSideFace(s), edge GetSideEdge(s), with the
  * reference tet nodes 0..3 at (v_k, x_f, v_{k+1}, x_c), exactly as in
- * PieceWiseLinearPolyhedronMapping. The tying operator T (num_sub_nodes x num_dofs) has identity
- * rows for real nodes; face-tied rows involve only the dofs of that face; cell-tied rows involve
- * all dofs.
+ * PieceWiseLinearPolyhedronMapping. For a polygon side s is the side triangle of face (edge) s
+ * with the reference nodes 0..2 at (v_k, v_{k+1}, x_c), exactly as in
+ * PieceWiseLinearPolygonMapping; it uses the nodes of the zeta = 0 face of the reference
+ * tetrahedron (the P_p triangle), see GetSideReferenceNodes(). The tying operator T
+ * (num_sub_nodes x num_dofs) has identity rows for real nodes; face-tied rows involve only the
+ * dofs of that face; cell-tied rows involve all dofs.
  */
 class SubmeshTying
 {
@@ -200,6 +205,8 @@ public:
                const TyingWeightProvider& weights);
 
   unsigned int GetDegree() const { return p_; }
+  /// 3 for a polyhedron, 2 for a polygon.
+  unsigned int GetDimension() const { return dim_; }
   const TetLagrangeReference& GetReferenceElement() const { return ref_; }
 
   size_t GetNumDofs() const { return dof_locations_.size(); }
@@ -212,9 +219,13 @@ public:
   size_t GetNumSides() const { return side_face_.size(); }
   size_t GetSideFace(size_t s) const { return side_face_[s]; }
   size_t GetSideEdge(size_t s) const { return side_edge_[s]; }
-  /// Sub-mesh node index of each reference tet node of side s.
+  /// Reference-element nodes that make up a side: every node of the reference tetrahedron for a
+  /// polyhedron, the nodes of its zeta = 0 face for a polygon. GetSideNodes(s)[k] and row k of
+  /// GetSideTying(s) belong to reference node GetSideReferenceNodes()[k].
+  const std::vector<size_t>& GetSideReferenceNodes() const { return side_reference_nodes_; }
+  /// Sub-mesh node index of each reference node (GetSideReferenceNodes()) of side s.
   const std::vector<size_t>& GetSideNodes(size_t s) const { return side_nodes_[s]; }
-  /// Rows of T restricted to the tet nodes of side s (num_tet_nodes x num_dofs).
+  /// Rows of T restricted to the reference nodes of side s (num_side_nodes x num_dofs).
   const DenseMatrix<double>& GetSideTying(size_t s) const { return side_tying_[s]; }
 
   size_t GetNumSubNodes() const { return sub_node_locations_.size(); }
@@ -224,7 +235,9 @@ public:
 
 private:
   unsigned int p_;
+  unsigned int dim_ = 3;
   TetLagrangeReference ref_;
+  std::vector<size_t> side_reference_nodes_;
 
   std::vector<Vector3> dof_locations_;
   std::vector<DofKey> dof_keys_;

@@ -9,15 +9,15 @@ namespace opensn
 {
 
 /**
- * Piecewise quadratic discontinuous (PWQD) finite element discretization on polyhedral cells:
- * nodes at the cell vertices and cell-edge midpoints, P2 on every side tetrahedron of the cell
- * with the face and cell sub-mesh nodes tied to the real nodes with quadratic precision (see
- * PieceWiseQuadraticPolyhedronMapping). The node ordering, sparsity pattern and DOF mapping are
+ * Piecewise quadratic discontinuous (PWQD) finite element discretization on polyhedral and
+ * polygonal cells: nodes at the cell vertices and cell-edge midpoints, P2 on every side
+ * tetrahedron (3D) or side triangle (2D) of the cell with the face and cell sub-mesh nodes tied
+ * to the real nodes with quadratic precision (see PieceWiseQuadraticPolyhedronMapping and
+ * PieceWiseQuadraticPolygonMapping). The node ordering, sparsity pattern and DOF mapping are
  * those of PieceWiseLinearDiscontinuous (they only depend on the per-cell node count).
  *
- * Only 3D polyhedral cells are supported in this version; slab and polygon cells are rejected.
- * The default quadrature order is FOURTH because the mass matrix is of degree 4 on each side
- * tetrahedron.
+ * Slab (1D) cells are rejected in this version. The default quadrature order is FOURTH because
+ * the mass matrix is of degree 4 on each side simplex.
  *
  * \ingroup doc_SpatialDiscretization
  */

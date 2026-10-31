@@ -524,9 +524,9 @@ TEST(PWQDMapping, Discretization)
       v += ucm.intV_shapeI(i);
     EXPECT_NEAR(v, cell->volume, 1e-13);
   }
-  // Insufficient quadrature order and non-polyhedral cells are rejected
+  // Insufficient quadrature order and slab cells are rejected
   EXPECT_THROW(PieceWiseQuadraticDiscontinuous::New(grid, QuadratureOrder::SECOND),
                std::invalid_argument);
-  auto square = BuildSquareMesh(1.0, 2, 0.0);
-  EXPECT_THROW(PieceWiseQuadraticDiscontinuous::New(square), std::invalid_argument);
+  auto line = BuildLineMesh(1.0, 4, 0.0);
+  EXPECT_THROW(PieceWiseQuadraticDiscontinuous::New(line), std::invalid_argument);
 }
