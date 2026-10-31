@@ -57,8 +57,8 @@ DiscreteOrdinatesProblem::GetInputParameters()
   params.AddOptionalParameter("spatial_discretization",
                               "pwld",
                               "Spatial discretization: \"pwld\" (piecewise linear discontinuous) "
-                              "or \"pwqd\" (piecewise quadratic discontinuous; 3D polyhedral "
-                              "meshes, CPU sweeps).");
+                              "or \"pwqd\" (piecewise quadratic discontinuous; 2D polygonal and "
+                              "3D polyhedral meshes, CPU sweeps).");
   params.ConstrainParameterRange("spatial_discretization",
                                  AllowableRangeList::New({"pwld", "pwqd"}));
   params.AddOptionalParameter("time_dependent",
@@ -558,10 +558,11 @@ DiscreteOrdinatesProblem::CheckPWQD(std::vector<std::string>& errors) const
   if (spatial_discretization_type_ != "pwqd")
     return;
 
-  // The quadratic basis is implemented for 3D polyhedral cells, CPU sweeps (AAH and CBC) and the
-  // steady-state source and eigenvalue solvers only.
-  if (grid_->GetDimension() != 3)
-    errors.emplace_back("spatial_discretization=\"pwqd\" requires a 3D (polyhedral) mesh.");
+  // The quadratic basis is implemented for 2D polygonal and 3D polyhedral cells, CPU sweeps (AAH
+  // and CBC) and the steady-state source and eigenvalue solvers only.
+  if (grid_->GetDimension() < 2)
+    errors.emplace_back("spatial_discretization=\"pwqd\" requires a 2D (polygonal) or 3D "
+                        "(polyhedral) mesh.");
   if (use_gpus_)
     errors.emplace_back("spatial_discretization=\"pwqd\" is not supported on GPUs.");
   if (IsTimeDependent())

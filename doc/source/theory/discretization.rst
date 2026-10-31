@@ -405,11 +405,12 @@ employed.
 
 | **Piece-Wise Quadratic Discontinuous (PWQD) basis functions.** OpenSn
   also offers a quadratic generalization of the PWL basis on
-  three-dimensional polyhedra (``spatial_discretization="pwqd"`` on
-  ``DiscreteOrdinatesProblem``). The polyhedron is split into the same
-  side tetrahedra as for PWL, but the standard quadratic (P2) Lagrange
-  element is used on each tetrahedron instead of the linear one. The P2
-  nodes of the sub-mesh are of three kinds: the polyhedron vertices and
+  two-dimensional polygons and three-dimensional polyhedra
+  (``spatial_discretization="pwqd"`` on ``DiscreteOrdinatesProblem``).
+  The polyhedron is split into the same side tetrahedra as for PWL, but
+  the standard quadratic (P2) Lagrange element is used on each
+  tetrahedron instead of the linear one. The P2 nodes of the sub-mesh are
+  of three kinds: the polyhedron vertices and
   the midpoints of the polyhedron edges, which are the unknowns of the
   cell (:math:`2 n_v + n_f - 2` per cell by Euler's formula, i.e., 10 on a
   tetrahedron and 20 on a hexahedron); the nodes on the sub-mesh edges
@@ -433,8 +434,14 @@ employed.
   quadrature integrates the mass matrix exactly. The MIP penalty constant
   is scaled by :math:`p(p+1)/2` and the penalty length uses the
   face-dependent orthogonal projection of
-  :cite:t:`turcksin2014discontinuous`. In this version PWQD is available
-  for 3D polyhedral meshes with AAH or CBC sweeps on CPUs, for
+  :cite:t:`turcksin2014discontinuous`. On a polygon the construction uses
+  the side triangles of PWL with the P2 element on each: the unknowns are
+  the vertices and the edge midpoints (:math:`2 n_v` per cell), the edge
+  traces are the one-dimensional P2 Lagrange functions, and only the
+  nodes on the spokes to the centroid are tied (by a least-squares
+  quadratic through all unknowns of the cell); on a triangle the basis is
+  the P2 Lagrange element. In this version PWQD is available for 2D
+  polygonal and 3D polyhedral meshes with AAH or CBC sweeps on CPUs, for
   steady-state source and eigenvalue problems.
 
 

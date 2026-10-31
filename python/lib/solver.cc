@@ -1249,10 +1249,10 @@ WrapLBS(py::module& slv)
         Spatial discretization. ``"pwld"`` is the piecewise linear discontinuous
         basis (nodes at the cell vertices). ``"pwqd"`` is the piecewise quadratic
         discontinuous basis (nodes at the cell vertices and edge midpoints; P2 on
-        the side tetrahedra of each cell with quadratic-precision tying), which
-        currently requires a 3D polyhedral mesh, CPU execution (AAH or CBC
-        sweeps) and a steady-state problem; MIP DSA uses the face-dependent
-        penalty length with it.
+        the side tetrahedra or side triangles of each cell with
+        quadratic-precision tying), which currently requires a 2D polygonal or
+        3D polyhedral mesh, CPU execution (AAH or CBC sweeps) and a steady-state
+        problem; MIP DSA uses the face-dependent penalty length with it.
     time_dependent : bool, default=False
         If true, the problem starts in time-dependent mode. Otherwise it starts in
         steady-state mode. Requires ``options.save_angular_flux=True`` and

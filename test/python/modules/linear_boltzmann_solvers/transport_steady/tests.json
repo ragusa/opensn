@@ -3091,5 +3091,140 @@
       }
     ],
     "outfileprefix": "transport_3d_pwqd_mms_4"
+  },
+  {
+    "file": "transport_2d_pwqd_mms.py",
+    "comment": "Manufactured solutions for PWQD on 2D meshes: quadratic patch tests exact on quadrilaterals, triangles and a triangle/quadrilateral/pentagon/hexagon mix (reflecting and with the exact inflow through spatially varying arbitrary boundaries); sine MMS third order on quadrilaterals and triangles (PWLD second order as control)",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-quads=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-triangles=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-polygons=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-quads-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-polygons-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-quad8-quad16=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-quad16-quad32=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-tri32-tri2048=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-quad16-quad32=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.2
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-tri32-tri2048=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.3
+      }
+    ]
+  },
+  {
+    "file": "transport_2d_pwqd_mms.py",
+    "comment": "Manufactured solutions for PWQD on 2D meshes: quadratic patch tests exact on quadrilaterals, triangles and a triangle/quadrilateral/pentagon/hexagon mix (reflecting and with the exact inflow through spatially varying arbitrary boundaries); sine MMS third order on quadrilaterals and triangles (PWLD second order as control)",
+    "num_procs": 2,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-quads=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-triangles=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-polygons=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-quads-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "PatchMaxNodalErr-pwqd-polygons-inflow=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-quad8-quad16=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-quad16-quad32=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwqd-tri32-tri2048=",
+        "goldvalue": 3.0,
+        "abs_tol": 0.5
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-quad16-quad32=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.2
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Order-pwld-tri32-tri2048=",
+        "goldvalue": 2.0,
+        "abs_tol": 0.3
+      }
+    ],
+    "outfileprefix": "transport_2d_pwqd_mms_np2"
   }
 ]
