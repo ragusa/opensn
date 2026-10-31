@@ -4,9 +4,18 @@
 #pragma once
 
 #include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_discontinuous.h"
+#include "framework/math/spatial_discretization/cell_mappings/finite_element/piecewise_quadratic/submesh_tying.h"
 
 namespace opensn
 {
+
+/// Tying of the non-real sub-mesh nodes of PWQD: least-squares quadratic fits (the default) or
+/// the quadratic serendipity functions on PWL coordinates (SerendipityTyingWeights).
+enum class PWQDTying
+{
+  LEAST_SQUARES = 0,
+  SERENDIPITY = 1
+};
 
 /**
  * Piecewise quadratic discontinuous (PWQD) finite element discretization on polyhedral and
@@ -24,15 +33,24 @@ namespace opensn
 class PieceWiseQuadraticDiscontinuous : public PieceWiseLinearDiscontinuous
 {
 private:
-  explicit PieceWiseQuadraticDiscontinuous(const std::shared_ptr<Mesh>& grid,
-                                           QuadratureOrder q_order);
+  PieceWiseQuadraticDiscontinuous(const std::shared_ptr<Mesh>& grid,
+                                  QuadratureOrder q_order,
+                                  std::shared_ptr<const TyingWeightProvider> weights);
 
-  static CellMappingFactory MakePWQDFactory(PieceWiseQuadraticDiscontinuous& self);
+  static CellMappingFactory MakePWQDFactory(PieceWiseQuadraticDiscontinuous& self,
+                                            std::shared_ptr<const TyingWeightProvider> weights);
+
+  std::shared_ptr<const TyingWeightProvider> weights_;
 
 public:
   /// Construct a shared object using the private constructor.
   static std::shared_ptr<PieceWiseQuadraticDiscontinuous>
-  New(const std::shared_ptr<Mesh>& grid, QuadratureOrder q_order = QuadratureOrder::FOURTH);
+  New(const std::shared_ptr<Mesh>& grid,
+      QuadratureOrder q_order = QuadratureOrder::FOURTH,
+      PWQDTying tying = PWQDTying::LEAST_SQUARES);
+
+  /// The weight provider shared by all cell mappings.
+  const TyingWeightProvider& GetTyingWeights() const { return *weights_; }
 };
 
 } // namespace opensn

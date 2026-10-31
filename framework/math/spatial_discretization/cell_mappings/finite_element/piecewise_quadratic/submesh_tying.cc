@@ -340,19 +340,19 @@ MakeFaceFrame(const std::vector<Vector3>& face_vertices_sorted)
 // ----------------------------------------------------------------------------------------------
 
 std::vector<double>
-AverageTyingWeights::FaceWeights(const std::vector<Vector3>& nodes_x,
+AverageTyingWeights::FaceWeights(const TyingNodeSet& nodes,
                                  const Vector3& /*x_tied*/,
                                  const FaceFrame& /*frame*/) const
 {
-  return std::vector<double>(nodes_x.size(), 1.0 / static_cast<double>(nodes_x.size()));
+  return std::vector<double>(nodes.x.size(), 1.0 / static_cast<double>(nodes.x.size()));
 }
 
 std::vector<double>
-AverageTyingWeights::CellWeights(const std::vector<Vector3>& nodes_x,
+AverageTyingWeights::CellWeights(const TyingNodeSet& nodes,
                                  const Vector3& /*x_tied*/,
                                  double /*scale*/) const
 {
-  return std::vector<double>(nodes_x.size(), 1.0 / static_cast<double>(nodes_x.size()));
+  return std::vector<double>(nodes.x.size(), 1.0 / static_cast<double>(nodes.x.size()));
 }
 
 LeastSquaresTyingWeights::LeastSquaresTyingWeights(unsigned int q) : q_(q)
@@ -362,10 +362,11 @@ LeastSquaresTyingWeights::LeastSquaresTyingWeights(unsigned int q) : q_(q)
 }
 
 std::vector<double>
-LeastSquaresTyingWeights::FaceWeights(const std::vector<Vector3>& nodes_x,
+LeastSquaresTyingWeights::FaceWeights(const TyingNodeSet& nodes,
                                       const Vector3& x_tied,
                                       const FaceFrame& frame) const
 {
+  const auto& nodes_x = nodes.x;
   const size_t n = nodes_x.size();
   const auto m_row = FaceMonomials(frame.Map(x_tied), q_);
   DenseMatrix<double> A(n, m_row.size(), 0.0);
@@ -379,10 +380,11 @@ LeastSquaresTyingWeights::FaceWeights(const std::vector<Vector3>& nodes_x,
 }
 
 std::vector<double>
-LeastSquaresTyingWeights::CellWeights(const std::vector<Vector3>& nodes_x,
+LeastSquaresTyingWeights::CellWeights(const TyingNodeSet& nodes,
                                       const Vector3& x_tied,
                                       double scale) const
 {
+  const auto& nodes_x = nodes.x;
   const size_t n = nodes_x.size();
   Vector3 origin{0.0, 0.0, 0.0};
   for (const auto& x : nodes_x)
@@ -681,22 +683,35 @@ SubmeshTying::SubmeshTying(const Mesh& grid,
       {
         const int f = sub_node_face_[i];
         const auto fd = sorted_by_key(face_dofs_[f]);
-        std::vector<Vector3> nodes_x;
-        nodes_x.reserve(fd.size());
+        TyingNodeSet nodes;
+        nodes.x.reserve(fd.size());
+        nodes.keys.reserve(fd.size());
         for (const auto d : fd)
-          nodes_x.push_back(dof_locations_[d]);
-        const auto w = weights.FaceWeights(nodes_x, sub_node_locations_[i], frames[f]);
+        {
+          nodes.x.push_back(dof_locations_[d]);
+          nodes.keys.push_back(dof_keys_[d]);
+        }
+        nodes.loops = {cell.faces[f].vertex_ids};
+        nodes.centroid = cell.faces[f].centroid;
+        const auto w = weights.FaceWeights(nodes, sub_node_locations_[i], frames[f]);
         for (size_t k = 0; k < fd.size(); ++k)
           T_(i, fd[k]) = w[k];
         break;
       }
       case SubmeshNodeKind::CELL_TIED:
       {
-        std::vector<Vector3> nodes_x;
-        nodes_x.reserve(N);
+        TyingNodeSet nodes;
+        nodes.x.reserve(N);
+        nodes.keys.reserve(N);
         for (const auto d : all_sorted)
-          nodes_x.push_back(dof_locations_[d]);
-        const auto w = weights.CellWeights(nodes_x, sub_node_locations_[i], diameter);
+        {
+          nodes.x.push_back(dof_locations_[d]);
+          nodes.keys.push_back(dof_keys_[d]);
+        }
+        for (const auto& face : cell.faces)
+          nodes.loops.push_back(face.vertex_ids);
+        nodes.centroid = cell.centroid;
+        const auto w = weights.CellWeights(nodes, sub_node_locations_[i], diameter);
         for (size_t k = 0; k < N; ++k)
           T_(i, all_sorted[k]) = w[k];
         break;

@@ -80,6 +80,25 @@ struct FaceFrame
  */
 FaceFrame MakeFaceFrame(const std::vector<Vector3>& face_vertices_sorted);
 
+/// Key identifying a dof independently of the cell: (vid, vid) for a vertex, (min vid, max vid)
+/// for an edge midpoint.
+using SubmeshDofKey = std::pair<uint64_t, uint64_t>;
+
+/**
+ * The real nodes (dofs) a tied sub-mesh node may depend on, in a canonical order (sorted by dof
+ * key, so that both cells sharing a face see the same list), with the topology a weight provider
+ * may need: the vertex loops (by global vertex id) of the face, or of every face of the cell, and
+ * the vertex average of the face or cell (OpenSn's face and cell centroids). For a polygon the
+ * loops are its edges (two vertices each).
+ */
+struct TyingNodeSet
+{
+  std::vector<Vector3> x;
+  std::vector<SubmeshDofKey> keys;
+  std::vector<std::vector<uint64_t>> loops;
+  Vector3 centroid;
+};
+
 /**
  * Provider of the weights that tie a non-real sub-mesh node to the real nodes (dofs).
  *
@@ -96,15 +115,14 @@ public:
   /// Highest polynomial degree the weights reproduce.
   virtual unsigned int GetMaxDegree() const = 0;
 
-  /// Weights over the real nodes of a face (nodes_x) for the tied point x_tied on that face.
-  virtual std::vector<double> FaceWeights(const std::vector<Vector3>& nodes_x,
-                                          const Vector3& x_tied,
-                                          const FaceFrame& frame) const = 0;
+  /// Weights over the real nodes of a face (nodes) for the tied point x_tied on that face.
+  virtual std::vector<double>
+  FaceWeights(const TyingNodeSet& nodes, const Vector3& x_tied, const FaceFrame& frame) const = 0;
 
-  /// Weights over all real nodes of the cell (nodes_x) for the tied point x_tied; scale is the
+  /// Weights over all real nodes of the cell (nodes) for the tied point x_tied; scale is the
   /// cell diameter.
   virtual std::vector<double>
-  CellWeights(const std::vector<Vector3>& nodes_x, const Vector3& x_tied, double scale) const = 0;
+  CellWeights(const TyingNodeSet& nodes, const Vector3& x_tied, double scale) const = 0;
 };
 
 /**
@@ -117,12 +135,11 @@ class AverageTyingWeights : public TyingWeightProvider
 public:
   std::string GetName() const override { return "average"; }
   unsigned int GetMaxDegree() const override { return 1; }
-  std::vector<double> FaceWeights(const std::vector<Vector3>& nodes_x,
+  std::vector<double> FaceWeights(const TyingNodeSet& nodes,
                                   const Vector3& x_tied,
                                   const FaceFrame& frame) const override;
-  std::vector<double> CellWeights(const std::vector<Vector3>& nodes_x,
-                                  const Vector3& x_tied,
-                                  double scale) const override;
+  std::vector<double>
+  CellWeights(const TyingNodeSet& nodes, const Vector3& x_tied, double scale) const override;
 };
 
 /**
@@ -141,12 +158,11 @@ public:
   explicit LeastSquaresTyingWeights(unsigned int q);
   std::string GetName() const override { return "lsq" + std::to_string(q_); }
   unsigned int GetMaxDegree() const override { return q_; }
-  std::vector<double> FaceWeights(const std::vector<Vector3>& nodes_x,
+  std::vector<double> FaceWeights(const TyingNodeSet& nodes,
                                   const Vector3& x_tied,
                                   const FaceFrame& frame) const override;
-  std::vector<double> CellWeights(const std::vector<Vector3>& nodes_x,
-                                  const Vector3& x_tied,
-                                  double scale) const override;
+  std::vector<double>
+  CellWeights(const TyingNodeSet& nodes, const Vector3& x_tied, double scale) const override;
 
 private:
   unsigned int q_;
@@ -195,9 +211,7 @@ enum class SubmeshNodeKind : int
 class SubmeshTying
 {
 public:
-  /// Key identifying a dof independently of the cell: (vid, vid) for a vertex, (min vid, max vid)
-  /// for an edge midpoint.
-  using DofKey = std::pair<uint64_t, uint64_t>;
+  using DofKey = SubmeshDofKey;
 
   SubmeshTying(const Mesh& grid,
                const Cell& cell,
