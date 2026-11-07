@@ -131,6 +131,9 @@ ResponseEvaluator::SetDataOptions(const InputParameters& input)
                           "A data object with name " + name + " already exists.");
 
   const auto prefixes = params.GetParam("file_prefixes");
+  const auto surfaces = params.GetParamVectorValue<std::string>("surfaces");
+  OpenSnInvalidArgumentIf(not surfaces.empty() and not prefixes.Has("surface_angular_fluxes"),
+                          "\"surfaces\" requires a \"surface_angular_fluxes\" file prefix.");
 
   FluxMomentData phi;
   if (prefixes.Has("flux_moments"))
@@ -145,7 +148,6 @@ ResponseEvaluator::SetDataOptions(const InputParameters& input)
   SurfaceAngularFluxData surf_psi;
   if (prefixes.Has("surface_angular_fluxes"))
   {
-    const auto surfaces = params.GetParamVectorValue<std::string>("surfaces");
     OpenSnInvalidArgumentIf(surfaces.empty(),
                             "\"surfaces\" must be specified when reading surface angular fluxes.");
     surf_psi = DistributeSurfaceAngularFluxes(

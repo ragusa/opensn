@@ -303,8 +303,9 @@ WrapResEval(py::module& response)
               :py:meth:`EvaluateSurfaceResponse`. All files of the prefix are read, whatever
               number of ranks wrote them, and their faces are distributed over the current ranks.
     surfaces: List[str], default=[]
-        Surfaces to read. Required with ``surface_angular_fluxes``. Each entry is a boundary name;
-        an interior surface name, which reads both stored sides ``<name>_u`` and ``<name>_d``; or a
+        Surfaces to read. Required with ``surface_angular_fluxes``, and rejected without it. Each
+        entry is a boundary name; an interior surface name, which reads both stored sides
+        ``<name>_u`` and ``<name>_d``; or a
         single side's tag, ``<name>_u`` or ``<name>_d``, which reads that side alone and makes it a
         half-range surface for :py:meth:`EvaluateSurfaceResponse`. A name that is itself a stored
         tag reads that tag. :py:meth:`EvaluateSurfaceResponse` tabulates which surfaces to read

@@ -214,6 +214,15 @@ if __name__ == "__main__":
     plane_b = evaluator.EvaluateSurfaceResponse("F", "B", ["plane"])
     xmax_b = evaluator.EvaluateSurfaceResponse("F", "B", ["xmax"])
 
+    # A surface list without surface files is rejected.
+    stray_surfaces_rejected = 0
+    try:
+        evaluator.SetOptions(
+            data=[{"name": "stray", "file_prefixes": {}, "surfaces": ["xmax"]}]
+        )
+    except ValueError as error:
+        stray_surfaces_rejected = int("surface_angular_fluxes" in str(error))
+
     # On the reflecting ymin boundary (normal -y), the upwind value of a direction entering the
     # domain is the angular flux of its reflection (omega_y -> -omega_y) at the same node.
     reflection_mismatch = 0.0
@@ -255,6 +264,7 @@ if __name__ == "__main__":
         print(f"B plane identity error={abs(plane_b / qoi_b - 1.0):.3e}")
         print(f"B boundary identity error={abs(xmax_b / qoi_b - 1.0):.3e}")
         print(f"Reflected upwind mismatch={reflection_mismatch:.3e}")
+        print(f"Stray surfaces rejected={stray_surfaces_rejected}")
 
     barrier()
     if rank == 0:
