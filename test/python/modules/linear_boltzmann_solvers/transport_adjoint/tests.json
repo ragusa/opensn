@@ -243,8 +243,8 @@
     ]
   },
   {
-    "file": "response_2d_surf_half_range.py",
-    "comment": "Half-range surface responses with no return flux (void background, pure-scattering source, absorbing detector), partitioned at the plane; full-range and positive-x half-range responses equal the forward QoI and the negative-x half-range response is zero",
+    "file": "response_2d_surf_parts.py",
+    "comment": "Outgoing and incoming parts of an interior surface response with no return flux (void background, pure-scattering source, absorbing detector), partitioned at the plane; the total and the positive-x part equal the forward QoI and the negative-x part is zero; a lone side is rejected",
     "num_procs": 2,
     "checks": [
       {
@@ -261,13 +261,13 @@
       },
       {
         "type": "KeyValuePair",
-        "key": "Full-range identity error=",
+        "key": "Total identity error=",
         "goldvalue": 0.0,
         "abs_tol": 1e-10
       },
       {
         "type": "KeyValuePair",
-        "key": "Half-range identity error=",
+        "key": "Outgoing part identity error=",
         "goldvalue": 0.0,
         "abs_tol": 1e-10
       },
@@ -276,6 +276,12 @@
         "key": "Returning fraction=",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Lone side rejected=",
+        "goldvalue": 1,
+        "abs_tol": 0.5
       }
     ]
   },

@@ -99,16 +99,32 @@ WrapResEval(py::module& response)
   );
   res_eval.def(
     "EvaluateSurfaceResponse",
-    &ResponseEvaluator::EvaluateSurfaceResponse,
+    [](const ResponseEvaluator& self,
+       const std::string& fwd_data_name,
+       const std::string& adj_data_name,
+       const std::vector<std::string>& surfaces)
+    {
+      py::dict result;
+      for (const auto& surface_response :
+           self.EvaluateSurfaceResponse(fwd_data_name, adj_data_name, surfaces))
+      {
+        py::dict parts;
+        parts["outgoing"] = surface_response.outgoing;
+        parts["incoming"] = surface_response.incoming;
+        parts["total"] = surface_response.Total();
+        result[py::str(surface_response.name)] = std::move(parts);
+      }
+      return result;
+    },
     R"(
-    Evaluate the surface inner product of forward and adjoint surface angular fluxes.
+    Evaluate the surface inner products of forward and adjoint surface angular fluxes.
 
     Both data sets must have been added with ``SetOptions(data=...)`` using the
     ``surface_angular_fluxes`` prefix. Faces are matched by location, so the two data sets may have
     been written by different numbers of ranks and partitions, and neither needs to match the
     partitioning of the current run.
 
-    For a surface :math:`S` with faces :math:`f`, the response is
+    For a surface :math:`S` with faces :math:`f`, the response carried across it is
 
     .. math::
 
@@ -149,51 +165,15 @@ WrapResEval(py::module& response)
     negative side of the surface, ``<name>_d`` when it is on the positive side. A surface that does
     not separate them gives zero.
 
-    A half-range surface is one side ``<name>_u`` or ``<name>_d`` of an interior surface read
-    without the other side into the forward data set. Its faces are those of that tag,
-    :math:`n_f` is their outward normal, and :math:`D_f` holds their outflow directions
-    (:math:`\mu_{f,d} > 0`), as for a boundary. The forward flux is taken from that tag and the
-    adjoint flux from the other side's tag in the adjoint data set, so the forward ``<name>_u``
-    with the adjoint ``<name>_d`` gives the part of the interior response carried in the positive
-    axis direction, and the forward ``<name>_d`` with the adjoint ``<name>_u`` the part carried in
-    the negative axis direction, with the opposite sign. A half-range surface is the outgoing part
-    of the interior surface requested by the same tag, so in this call a tag always names the
-    normal, and the forward data set decides whether the response is full-range (both sides read)
-    or half-range (one side read).
-
-    For an interior surface ``x20`` (written as ``x20_u`` and ``x20_d``), the surfaces read into
-    each data set and the surfaces passed here select:
-
-    .. list-table::
-       :header-rows: 1
-
-       * - Response
-         - Forward data ``surfaces``
-         - Adjoint data ``surfaces``
-         - ``surfaces`` here
-       * - Full-range, +axis
-         - ``["x20"]``
-         - ``["x20"]``
-         - ``["x20"]`` or ``["x20_u"]``
-       * - Full-range, -axis
-         - ``["x20"]``
-         - ``["x20"]``
-         - ``["x20_d"]``
-       * - Half-range, +axis
-         - ``["x20_u"]``
-         - ``["x20_d"]`` or ``["x20"]``
-         - ``["x20_u"]``
-       * - Half-range, -axis
-         - ``["x20_d"]``
-         - ``["x20_u"]`` or ``["x20"]``
-         - ``["x20_d"]``
-
-    The full-range +axis response equals the half-range +axis response minus the half-range -axis
-    response.
+    Each response is split by the sign of :math:`\mu_{f,d}`: ``outgoing`` sums the directions
+    with :math:`\mu_{f,d} > 0`, which cross along :math:`n_f`, and ``incoming`` those with
+    :math:`\mu_{f,d} < 0`, which cross back; ``total`` is their sum, :math:`R`. For an interior
+    surface ``x20`` requested along its ``_u`` normal (+x), ``outgoing`` is the part carried in the
+    +x direction and ``incoming`` minus the part carried in the -x direction. Requested as
+    ``x20_d``, the two parts swap and change sign. For a boundary, ``incoming`` is 0.
 
     Forward and adjoint directions are paired by equal direction vectors, and the nodes of matched
-    faces by location. Per-surface outgoing (:math:`\mu_{f,d} > 0`) and incoming
-    (:math:`\mu_{f,d} < 0`) contributions are logged at verbosity 1. This call is collective.
+    faces by location. The responses are also logged at verbosity 1. This call is collective.
     The adjoint data must come from an adjoint problem, which OpenSn supports only in Cartesian
     geometry, so surface responses are not available for curvilinear (RZ) problems.
 
@@ -204,17 +184,18 @@ WrapResEval(py::module& response)
     adj_data_name: str
         Name of the adjoint data set. It must have been written from an adjoint problem.
     surfaces: List[str], default=[]
-        Surfaces to evaluate: boundary names; interior surface names, bare (``<name>``, along
+        Surfaces to evaluate: boundary names, and interior surface names, bare (``<name>``, along
         the ``_u`` normal) or with the tag of the side whose normal to use (``<name>_u`` or
-        ``<name>_d``); and half-range surface tags. Each surface may be requested once, under one
-        of its names. If empty, every surface in the forward data is evaluated: pairs of interior
-        tags ``<name>_u``/``<name>_d`` form an interior surface, evaluated along its ``_u`` normal,
-        a lone interior tag a half-range surface, and every boundary tag a boundary.
+        ``<name>_d``). Each surface may be requested once, under one of its names. If empty, every
+        surface in the forward data is evaluated, in name order, interior surfaces along their
+        ``_u`` normals.
 
     Returns
     -------
-    float
-        The response summed over the selected surfaces.
+    Dict[str, Dict[str, float]]
+        For each surface, under the name it was requested by and in the requested order, a
+        dictionary with keys ``outgoing``, ``incoming``, and ``total`` (their sum, the response
+        carried across the surface). Sum the ``total`` values to combine surfaces.
 
     Raises
     ------
@@ -306,12 +287,9 @@ WrapResEval(py::module& response)
               number of ranks wrote them, and their faces are distributed over the current ranks.
     surfaces: List[str], default=[]
         Surfaces to read. Required with ``surface_angular_fluxes``, and rejected without it. Each
-        entry is a boundary name; an interior surface name, which reads both stored sides
-        ``<name>_u`` and ``<name>_d``; or a
-        single side's tag, ``<name>_u`` or ``<name>_d``, which reads that side alone and makes it a
-        half-range surface for :py:meth:`EvaluateSurfaceResponse`. A name that is itself a stored
-        tag reads that tag. :py:meth:`EvaluateSurfaceResponse` tabulates which surfaces to read
-        and evaluate for each full-range and half-range response.
+        entry is a boundary name or an interior surface name, which reads both stored sides
+        ``<name>_u`` and ``<name>_d``. A single side's tag is rejected, because a surface response
+        needs both sides.
     )"
   );
   res_eval.def(

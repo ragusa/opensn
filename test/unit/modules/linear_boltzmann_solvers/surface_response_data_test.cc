@@ -100,6 +100,26 @@ ExpectedResponse(const bool interior)
   return response;
 }
 
+/// Closed-form outgoing (mu > 0) and incoming (mu < 0) parts of the interior surface response
+/// along +x.
+std::pair<double, double>
+ExpectedInteriorParts()
+{
+  double outgoing = 0.0;
+  double incoming = 0.0;
+  for (size_t gs = 0; gs < groups_per_groupset.size(); ++gs)
+    for (size_t d = 0; d < directions.size(); ++d)
+    {
+      const double mu = directions[d][0];
+      for (std::uint64_t g = 0; g < groups_per_groupset[gs]; ++g)
+        (mu > 0.0 ? outgoing : incoming) +=
+          mu * weights[d] *
+          IntegrateProduct(FluxCoefficients(false, mu > 0.0 ? 'u' : 'd', directions[d], gs, g),
+                           FluxCoefficients(true, mu > 0.0 ? 'd' : 'u', directions[d], gs, g));
+    }
+  return {outgoing, incoming};
+}
+
 struct TagSpec
 {
   std::string name;
@@ -546,14 +566,6 @@ TEST_F(SurfaceResponseDataTest, RejectsIncompatibleDataSets)
   // Unknown surface.
   EXPECT_THROW(ComputeSurfaceResponses(forward, adjoint, {"left"}, mpi_comm),
                std::invalid_argument);
-
-  // One side of an interior surface alone is a half-range surface, which pairs with the other side
-  // of the adjoint data, so the same side alone in both data sets is rejected.
-  const auto lone_forward = DistributeSurfaceAngularFluxes(forward_base, {"plane_u"}, mpi_comm);
-  const auto lone_adjoint =
-    DistributeSurfaceAngularFluxes(Write("adjoint_ok", AdjointSpec()), {"plane_u"}, mpi_comm);
-  EXPECT_THROW(ComputeSurfaceResponses(lone_forward, lone_adjoint, {}, mpi_comm),
-               std::invalid_argument);
 }
 
 TEST_F(SurfaceResponseDataTest, MatchesDirectionsRelativeToQuadratureSpacing)
@@ -745,43 +757,31 @@ TEST_F(SurfaceResponseDataTest, ResolvesInteriorSurfaceNames)
                std::logic_error);
 }
 
-TEST_F(SurfaceResponseDataTest, HalfRangeSurfacesGiveTheInteriorTerms)
+TEST_F(SurfaceResponseDataTest, InteriorPartsMatchClosedForm)
 {
+  const auto forward =
+    DistributeSurfaceAngularFluxes(Write("forward", ForwardSpec()), {"plane"}, mpi_comm);
+  const auto adjoint =
+    DistributeSurfaceAngularFluxes(Write("adjoint", AdjointSpec()), {"plane"}, mpi_comm);
+  const auto responses = ComputeSurfaceResponses(forward, adjoint, {"plane"}, mpi_comm);
+  ASSERT_EQ(responses.size(), 1U);
+  // Directions crossing along +x pair the forward `_u` side with the adjoint `_d` side, and those
+  // crossing back the forward `_d` side with the adjoint `_u` side.
+  const auto [outgoing, incoming] = ExpectedInteriorParts();
+  EXPECT_NEAR(responses.front().outgoing, outgoing, 1.0e-13 * std::abs(outgoing));
+  EXPECT_NEAR(responses.front().incoming, incoming, 1.0e-13 * std::abs(incoming));
+  EXPECT_DOUBLE_EQ(responses.front().Total(), outgoing + incoming);
+}
+
+TEST_F(SurfaceResponseDataTest, RejectsLoneInteriorSide)
+{
+  // A surface response needs both sides of an interior surface, in either data set.
   const auto forward_base = Write("forward", ForwardSpec());
-  const auto adjoint_base = Write("adjoint", AdjointSpec());
-  const auto forward = DistributeSurfaceAngularFluxes(forward_base, {"plane"}, mpi_comm);
-  const auto adjoint = DistributeSurfaceAngularFluxes(adjoint_base, {"plane"}, mpi_comm);
-  const auto interior = ComputeSurfaceResponses(forward, adjoint, {"plane"}, mpi_comm);
-  ASSERT_EQ(interior.size(), 1U);
-
-  // Forward `_u` with adjoint `_d` carries the directions leaving the `_u` cell: the interior
-  // outgoing term. Forward `_d` with adjoint `_u` carries those leaving the `_d` cell, whose cosine
-  // with the `_d` normal is minus that with the `_u` normal: minus the interior incoming term.
-  const auto Half = [&](const std::string& forward_tag, const std::string& adjoint_tag)
-  {
-    const auto responses =
-      ComputeSurfaceResponses(DistributeSurfaceAngularFluxes(forward_base, {forward_tag}, mpi_comm),
-                              DistributeSurfaceAngularFluxes(adjoint_base, {adjoint_tag}, mpi_comm),
-                              {},
-                              mpi_comm);
-    EXPECT_EQ(responses.size(), 1U);
-    EXPECT_EQ(responses.front().name, forward_tag);
-    EXPECT_EQ(responses.front().kind, SurfaceKind::half_range);
-    EXPECT_EQ(responses.front().incoming, 0.0);
-    return responses.front().outgoing;
-  };
-  const double outgoing = interior.front().outgoing;
-  const double incoming = interior.front().incoming;
-  EXPECT_NEAR(Half("plane_u", "plane_d"), outgoing, 1.0e-13 * std::abs(outgoing));
-  EXPECT_NEAR(Half("plane_d", "plane_u"), -incoming, 1.0e-13 * std::abs(incoming));
-
-  // A half-range surface needs the other side in the adjoint data.
-  EXPECT_THROW(
-    ComputeSurfaceResponses(DistributeSurfaceAngularFluxes(forward_base, {"plane_u"}, mpi_comm),
-                            DistributeSurfaceAngularFluxes(adjoint_base, {"plane_u"}, mpi_comm),
-                            {},
-                            mpi_comm),
-    std::invalid_argument);
+  EXPECT_THROW(DistributeSurfaceAngularFluxes(forward_base, {"plane_u"}, mpi_comm),
+               std::invalid_argument);
+  EXPECT_THROW(DistributeSurfaceAngularFluxes(forward_base, {"plane_d", "right"}, mpi_comm),
+               std::invalid_argument);
+  EXPECT_NO_THROW(DistributeSurfaceAngularFluxes(forward_base, {"plane_u", "plane_d"}, mpi_comm));
 }
 
 TEST_F(SurfaceResponseDataTest, SideTagsOrientInteriorSurfaces)
@@ -810,16 +810,6 @@ TEST_F(SurfaceResponseDataTest, SideTagsOrientInteriorSurfaces)
   EXPECT_EQ(plane_d.front().kind, SurfaceKind::interior);
   EXPECT_EQ(plane_d.front().outgoing, -incoming);
   EXPECT_EQ(plane_d.front().incoming, -outgoing);
-
-  // The outgoing term along the `_d` normal is the half-range surface `plane_d`.
-  const auto half_range =
-    ComputeSurfaceResponses(DistributeSurfaceAngularFluxes(forward_base, {"plane_d"}, mpi_comm),
-                            adjoint,
-                            {"plane_d"},
-                            mpi_comm);
-  ASSERT_EQ(half_range.size(), 1U);
-  EXPECT_EQ(half_range.front().kind, SurfaceKind::half_range);
-  EXPECT_NEAR(half_range.front().outgoing, plane_d.front().outgoing, 1.0e-13 * std::abs(incoming));
 
   // A surface may be requested once under any of its names, and only interior surfaces take a
   // side tag.

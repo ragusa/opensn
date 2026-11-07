@@ -209,10 +209,12 @@ if __name__ == "__main__":
     )
     qoi_a = evaluator.EvaluateResponse("A")
     qoi_b = evaluator.EvaluateResponse("B")
-    plane_a = evaluator.EvaluateSurfaceResponse("F", "A", ["plane"])
-    vacuum_a = evaluator.EvaluateSurfaceResponse("F", "A", vacuum_boundaries)
-    plane_b = evaluator.EvaluateSurfaceResponse("F", "B", ["plane"])
-    xmax_b = evaluator.EvaluateSurfaceResponse("F", "B", ["xmax"])
+    plane_a = evaluator.EvaluateSurfaceResponse("F", "A", ["plane"])["plane"]["total"]
+    vacuum_a = sum(
+        r["total"] for r in evaluator.EvaluateSurfaceResponse("F", "A", vacuum_boundaries).values()
+    )
+    plane_b = evaluator.EvaluateSurfaceResponse("F", "B", ["plane"])["plane"]["total"]
+    xmax_b = evaluator.EvaluateSurfaceResponse("F", "B", ["xmax"])["xmax"]["total"]
 
     # A surface list without surface files is rejected.
     stray_surfaces_rejected = 0

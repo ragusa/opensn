@@ -371,13 +371,23 @@ if __name__ == "__main__":
             },
         ]
     )
-    evaluator_surface_qoi = evaluator.EvaluateSurfaceResponse(
+    evaluator_surface = evaluator.EvaluateSurfaceResponse(
         "forward_all", "adjoint_interior", surfaces=["inter_x"]
-    )
+    )["inter_x"]
+    evaluator_surface_qoi = evaluator_surface["total"]
     # The side tag inter_x_d measures the same interior surface along its own normal, n = -x.
-    reversed_surface_qoi = evaluator.EvaluateSurfaceResponse(
+    reversed_surface = evaluator.EvaluateSurfaceResponse(
         "forward_all", "adjoint_interior", surfaces=["inter_x_d"]
-    )
+    )["inter_x_d"]
+    reversed_surface_qoi = reversed_surface["total"]
+    # Along -x the parts swap and change sign, and each total is the sum of its parts.
+    if (
+        reversed_surface["outgoing"] != -evaluator_surface["incoming"]
+        or reversed_surface["incoming"] != -evaluator_surface["outgoing"]
+        or evaluator_surface["total"]
+        != evaluator_surface["outgoing"] + evaluator_surface["incoming"]
+    ):
+        raise RuntimeError("Inconsistent outgoing and incoming parts of inter_x")
 
     # By default every forward surface is evaluated; the adjoint data lack the boundary tags.
     try:

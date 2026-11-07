@@ -580,6 +580,25 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
   BroadcastStrings(comm, surface_tags, 0);
   BroadcastFileSetHeader(comm, header);
   const auto num_surfaces = surface_tags.size();
+
+  // Surface responses pair both sides of an interior surface, so a side is read only with its
+  // other side. The tags and kinds are identical on all ranks.
+  for (size_t s = 0; s < num_surfaces; ++s)
+  {
+    if (header.interior[s] == 0)
+      continue;
+    const auto& tag = surface_tags[s];
+    const auto other = tag.substr(0, tag.size() - 2) + (tag.ends_with("_u") ? "_d" : "_u");
+    OpenSnInvalidArgumentIf(
+      std::find(surface_tags.begin(), surface_tags.end(), other) == surface_tags.end(),
+      std::string("Side ")
+        .append(tag)
+        .append(" of an interior surface was requested without its other side ")
+        .append(other)
+        .append(". Request the interior surface by its name, ")
+        .append(tag.substr(0, tag.size() - 2))
+        .append("."));
+  }
   const auto num_partitions = header.num_partitions;
   const auto num_groupsets = header.quadratures.size();
 
@@ -1001,10 +1020,10 @@ ComputeSurfaceResponses(const DistributedSurfaceData& forward,
       forward.groupsets[gs], adjoint.groupsets[gs], "groupset " + std::to_string(gs)));
 
   // Map the available surfaces by name from the forward data. The writer records whether each tag
-  // is one side, <name>_u or <name>_d, of an interior surface: both sides form an interior surface,
-  // named <name>, and one side alone is a half-range surface, named by its tag. Any other tag is a
-  // boundary, whatever its name.
-  // ex; available_surfs = { "inter_x" -> interior, "inter_y_u" -> half_range, "xmax" -> boundary }
+  // is one side, <name>_u or <name>_d, of an interior surface; both sides form the interior surface
+  // <name>, which DistributeSurfaceAngularFluxes reads together. Any other tag is a boundary,
+  // whatever its name.
+  // ex; available_surfs = { "inter_x" -> interior, "xmax" -> boundary }
   std::map<std::string, SurfaceKind> available_surfs;
   for (const auto& surface : forward.surfaces)
   {
@@ -1014,13 +1033,11 @@ ComputeSurfaceResponses(const DistributedSurfaceData& forward,
     if (surface.second.interior)
     {
       const auto other = forward.surfaces.find(OtherSideTag(surface_tag));
-      if (other != forward.surfaces.end() and other->second.interior)
-      {
-        name = surface_tag.substr(0, surface_tag.size() - 2);
-        kind = SurfaceKind::interior;
-      }
-      else
-        kind = SurfaceKind::half_range;
+      OpenSnInvalidArgumentIf(other == forward.surfaces.end() or not other->second.interior,
+                              "The forward data hold side " + surface_tag +
+                                " of an interior surface without its other side.");
+      name = surface_tag.substr(0, surface_tag.size() - 2);
+      kind = SurfaceKind::interior;
     }
     const auto [it, inserted] = available_surfs.emplace(name, kind);
     OpenSnInvalidArgumentIf(not inserted and it->second != kind,
@@ -1070,14 +1087,12 @@ ComputeSurfaceResponses(const DistributedSurfaceData& forward,
     }
   }
 
-  // The adjoint tags each surface pairs with: both sides of an interior surface, the other side of
-  // a half-range surface, and the boundary itself.
+  // The adjoint tags each surface pairs with: both sides of an interior surface, and the boundary
+  // itself.
   const auto AdjointTags = [](const std::string& name, const SurfaceKind kind)
   {
     if (kind == SurfaceKind::interior)
       return std::vector<std::string>{name + "_u", name + "_d"};
-    if (kind == SurfaceKind::half_range)
-      return std::vector<std::string>{OtherSideTag(name)};
     return std::vector<std::string>{name};
   };
   for (const auto& selected : selected_surfs)
@@ -1118,9 +1133,9 @@ ComputeSurfaceResponses(const DistributedSurfaceData& forward,
     std::uint64_t& extra = local_counts[3 * surface_index + 1];
     std::uint64_t& mismatched = local_counts[3 * surface_index + 2];
 
-    // A boundary or half-range surface: the forward faces are the anchor and their outflow
-    // directions are summed against the adjoint faces of the paired tag.
-    if (kind != SurfaceKind::interior)
+    // A boundary: the forward faces are the anchor and their outflow directions are summed against
+    // the adjoint faces of the same tag.
+    if (kind == SurfaceKind::boundary)
     {
       const auto& anchor = forward.surfaces.at(name);
       const auto& partner = adjoint.surfaces.at(AdjointTags(name, kind).front());
