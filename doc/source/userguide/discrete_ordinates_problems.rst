@@ -998,6 +998,10 @@ source from the detector gives zero, its half-range parts cancelling. The
 <../tutorials/applications/detector_response/surface_response/surface_resp>`
 works through both cases for two detectors on opposite sides of a source.
 
+Interior surfaces must lie on cell faces: a plane that cuts through a cell is
+rejected, because the surface would have a hole there and would no longer
+separate the source from the detector.
+
 For restartable solver state, prefer the restart options documented above over
 manual angular-flux files. Manual angular-flux files are useful when the
 workflow explicitly wants to manage angular fluxes, but restart dumps also carry

@@ -592,9 +592,9 @@ WrapLBS(py::module& slv)
         Interior surfaces in the form {'name': ('axis', value)}, where axis is 'x', 'y', or 'z'.
         Each interior surface is written under two tags: '<name>_u' for faces whose outward normal
         aligns with the positive axis and '<name>_d' for faces with the opposite orientation.
-        An interior surface must lie inside the mesh, must match at least one cell face, and may
-        not share a plane with another interior surface. Cells the surface cuts through contribute
-        no faces; only faces lying on the surface are written. Neither its name nor its
+        An interior surface must lie inside the mesh, on cell faces (it may not cut through a
+        cell), must match at least one cell face, and may not share a plane with another interior
+        surface. Neither its name nor its
         generated tags may equal a requested boundary name. It may not coincide with an exterior
         boundary; export that boundary by name using boundary_surfaces instead.
 
@@ -618,8 +618,8 @@ WrapLBS(py::module& slv)
         If ``options.save_angular_flux`` is false; if the problem is in adjoint mode and its
         solution is not in the physical orientation left by an adjoint solve; if a boundary name is
         unknown or not on the mesh; or if an interior surface has an invalid axis, lies outside the
-        mesh, shares a plane with another interior surface, coincides with an exterior boundary,
-        matches no mesh faces, or has a name or generated tag equal to a requested boundary
+        mesh, cuts through a cell, shares a plane with another interior surface, coincides with an
+        exterior boundary, matches no mesh faces, or has a name or generated tag equal to a requested boundary
         name.
     RuntimeError
         If no rank requests a surface, or if the file cannot be written.

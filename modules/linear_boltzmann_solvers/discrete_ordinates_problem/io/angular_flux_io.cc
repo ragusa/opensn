@@ -447,19 +447,18 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
   OpenSnInvalidArgumentIf(invalid_interior_axis,
                           "An interior surface has an invalid axis. Expected 'x', 'y', or 'z'.");
 
-  // Interior surfaces must lie inside the mesh and be distinct. A surface may cut through some
-  // cells; those cells contribute no faces, and only faces lying on the surface are written. A
-  // surface that matches no faces at all is rejected below. Surface selections may differ by rank,
-  // so each rank checks its own selections and a single flag reduction reports the failure on all
-  // ranks.
+  // Interior surfaces must lie inside the mesh, on cell faces, and be distinct. A surface that cuts
+  // through a cell would have a hole there, so it would no longer separate the two sides and its
+  // response would be wrong. Surface selections may differ by rank, so each rank checks its own
+  // selections and a single flag reduction reports the failure on all ranks.
   enum InteriorSurfaceError
   {
     outside_mesh = 0,
     duplicate_plane = 1,
-    num_errors = 2
+    cuts_cell = 2,
+    num_errors = 3
   };
   std::array<int, num_errors> local_surface_errors{};
-  int partially_cut = 0;
   for (auto it = interior_surfs.begin(); it != interior_surfs.end(); ++it)
   {
     const auto& [axis, slice] = it->second;
@@ -474,8 +473,6 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
 
     for (const auto& cell : grid->GetLocalCells())
     {
-      if (partially_cut)
-        break;
       double cell_min = std::numeric_limits<double>::max();
       double cell_max = std::numeric_limits<double>::lowest();
       for (const auto vid : cell->vertex_ids)
@@ -485,17 +482,22 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
         cell_max = std::max(cell_max, coordinate);
       }
       if (cell_min < slice - surface_tolerance and cell_max > slice + surface_tolerance)
-        partially_cut = 1;
+      {
+        local_surface_errors[cuts_cell] = 1;
+        break;
+      }
     }
   }
   std::array<int, num_errors> surface_errors{};
   mpi_comm.all_reduce(
     local_surface_errors.data(), num_errors, surface_errors.data(), mpi::op::max<int>());
-  mpi_comm.all_reduce(partially_cut, mpi::op::max<int>());
   OpenSnInvalidArgumentIf(surface_errors[outside_mesh],
                           "An interior surface lies outside the mesh.");
   OpenSnInvalidArgumentIf(surface_errors[duplicate_plane],
                           "Two interior surfaces are defined on the same plane.");
+  OpenSnInvalidArgumentIf(
+    surface_errors[cuts_cell],
+    "An interior surface cuts through mesh cells. Interior surfaces must lie on cell faces.");
 
   // An interior surface must not alias an exterior boundary. Without this check, a face selected
   // by both definitions is assigned only the boundary tag below, leaving the requested interior
@@ -589,9 +591,6 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
                           unmatched_surface_message.empty()
                             ? std::string("An interior surface matches no mesh faces.")
                             : unmatched_surface_message);
-  if (partially_cut)
-    log.Log0Warning() << "WriteSurfaceAngularFluxes: An interior surface cuts through some mesh "
-                         "cells; only faces lying on the surface are written.";
 
   // This is collective and must be called even on ranks with no requested boundary surfaces.
   const auto unique_bids = grid->GetUniqueBoundaryIDs();

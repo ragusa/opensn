@@ -183,9 +183,9 @@ public:
    * \param file_base File name base
    * \param boundary_surfs Boundary surface names
    * \param interior_surfs Interior surface definitions, keyed by name, as an axis ("x", "y", or
-   * "z") and a coordinate. Each surface must lie inside the mesh, must match at least one cell
-   * face, must not coincide with an exterior boundary, and must not share a plane with another
-   * requested surface. Cells the surface cuts through contribute no faces. Each surface is written
+   * "z") and a coordinate. Each surface must lie inside the mesh, on cell faces (it must not cut
+   * through a cell), must match at least one cell face, must not coincide with an exterior
+   * boundary, and must not share a plane with another requested surface. Each surface is written
    * with an `_u` tag for face normals aligned with the positive specified axis and a `_d` tag for
    * the opposite orientation; neither these tags nor the surface name may equal a requested
    * boundary name. Each tag's `mesh/<tag>` group records in its `interior` attribute whether the
