@@ -236,8 +236,9 @@ if __name__ == "__main__":
     assert len(boundary_surfaces) == 4
     for surface in boundary_surfaces:
         if not surface["data"]["psi"]:
-            if surface["data"]["node_index"] or surface["data"]["dir_index"]:
-                raise RuntimeError("Empty surface contains angular-flux start offsets")
+            mapping = surface["mapping"]
+            if mapping["normals"] or mapping["fe_shape"] or mapping["M_ij"]:
+                raise RuntimeError("Empty surface contains face data")
 
     # Any file of a set can be read by index, so fewer ranks than files can reach every file.
     # Reading both partitions on each rank recovers every face of the x = 6 plane, one per cell row.
@@ -315,8 +316,10 @@ if __name__ == "__main__":
     if len(forward_up["mapping"]["cell_ids"]) != len(forward_down["mapping"]["cell_ids"]):
         raise RuntimeError("The x = 6 plane is split across ranks")
 
-    num_up_nodes = sum(forward_up["mapping"]["num_face_nodes"])
-    num_dirs = len(forward_up["data"]["wt_d"]) // max(1, num_up_nodes)
+    # The groupset quadrature and the face normals give the direction cosines; one group.
+    omega = forward_up["data"]["omega"]
+    weights = forward_up["data"]["weights"]
+    num_dirs = len(weights)
     local_surface_qoi = 0.0
     m_offset = 0
     for face, num_nodes in enumerate(forward_up["mapping"]["num_face_nodes"]):
@@ -328,16 +331,14 @@ if __name__ == "__main__":
         down_of_up = node_permutation(nodes_up, face_nodes(forward_down, face_down))
 
         def psi(surface, face_index, node, d):
-            node_start = surface["data"]["node_index"][
-                sum(surface["mapping"]["num_face_nodes"][:face_index]) + node
-            ]
-            return surface["data"]["psi"][node_start + d]
+            k = sum(surface["mapping"]["num_face_nodes"][:face_index]) + node
+            return surface["data"]["psi"][k * num_dirs + d]
 
-        node0 = sum(forward_up["mapping"]["num_face_nodes"][:face])
-        mass = forward_up["data"]["M_ij"][m_offset : m_offset + num_nodes * num_nodes]
+        normal = forward_up["mapping"]["normals"][3 * face : 3 * face + 3]
+        mass = forward_up["mapping"]["M_ij"][m_offset : m_offset + num_nodes * num_nodes]
         for d in range(num_dirs):
-            mu = forward_up["data"]["mu"][node0 * num_dirs + d]
-            weight = forward_up["data"]["wt_d"][node0 * num_dirs + d]
+            mu = sum(omega[3 * d + c] * normal[c] for c in range(3))
+            weight = weights[d]
             for i in range(num_nodes):
                 if mu > 0.0:
                     psi_i = psi(forward_up, face, i, d)

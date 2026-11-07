@@ -648,27 +648,25 @@ WrapLBS(py::module& slv)
       py::list result;
       for (const auto& surface_flux : surface_fluxes)
       {
+        const auto& surface_map = *surface_flux.mapping;
         py::dict mapping;
-        mapping["cell_ids"] = surface_flux.mapping.cell_ids;
-        mapping["num_face_nodes"] = surface_flux.mapping.num_face_nodes;
-        mapping["cell_map"] = surface_flux.mapping.cell_map;
-        mapping["centroid_origin"] = surface_flux.mapping.centroid_origin;
-        mapping["centroid_spacing"] = surface_flux.mapping.centroid_spacing;
-        mapping["cell_stride"] = surface_flux.mapping.cell_stride;
-        mapping["nodes_x"] = surface_flux.mapping.nodes_x;
-        mapping["nodes_y"] = surface_flux.mapping.nodes_y;
-        mapping["nodes_z"] = surface_flux.mapping.nodes_z;
+        mapping["cell_ids"] = surface_map.cell_ids;
+        mapping["num_face_nodes"] = surface_map.num_face_nodes;
+        mapping["cell_map"] = surface_map.cell_map;
+        mapping["centroid_origin"] = surface_map.centroid_origin;
+        mapping["centroid_spacing"] = surface_map.centroid_spacing;
+        mapping["nodes_x"] = surface_map.nodes_x;
+        mapping["nodes_y"] = surface_map.nodes_y;
+        mapping["nodes_z"] = surface_map.nodes_z;
+        mapping["normals"] = surface_map.normals;
+        mapping["fe_shape"] = surface_map.fe_shape;
+        mapping["M_ij"] = surface_map.mass_matrix;
 
         py::dict data;
         data["omega"] = surface_flux.data.omega;
-        data["mu"] = surface_flux.data.mu;
-        data["wt_d"] = surface_flux.data.wt_d;
-        data["M_ij"] = surface_flux.data.mass_matrix;
-        data["fe_shape"] = surface_flux.data.fe_shape;
+        data["weights"] = surface_flux.data.weights;
         data["psi"] = surface_flux.data.psi;
         data["upwind_psi"] = surface_flux.data.upwind_psi;
-        data["node_index"] = surface_flux.data.node_index;
-        data["dir_index"] = surface_flux.data.dir_index;
 
         py::dict entry;
         entry["groupset_id"] = surface_flux.groupset_id;
@@ -711,20 +709,30 @@ WrapLBS(py::module& slv)
         'num_partitions', 'file_set_id', 'num_directions', 'num_groups', 'first_group',
         'surface_name', 'interior', 'mapping', and 'data'. 'adjoint' is True when the file was
         written from an adjoint problem. 'file_set_id' is shared by the files written by one
-        WriteSurfaceAngularFluxes call.
-        'interior' is True when the tag is one side of an interior surface and False for a
-        boundary. 'num_partitions' is
-        the number of files in the set, one per writing rank. 'num_directions' and 'num_groups' are
-        the counts of the entry's groupset, and 'first_group' its first group. In 'data', 'psi'
-        holds the angular flux of the face's cell; for a boundary tag, 'upwind_psi' (empty for an
-        interior tag) holds the face value upwind of each direction along the direction the data
-        transport in (Omega for forward data, -Omega for adjoint data): 'psi' for a direction
-        leaving the domain, and the boundary-condition value the sweep used for one entering it.
-        The 'cell_map' in 'mapping' maps
-        face centroids, with 'centroid_origin' subtracted before each coordinate is divided by
-        'centroid_spacing' (1e-9 times the global mesh extent) and rounded to an integer, to the
-        surface face index. The same face has the same key from either side of an interior surface
-        and in every file for the same mesh.
+        WriteSurfaceAngularFluxes call. 'interior' is True when the tag is one side of an interior
+        surface and False for a boundary. 'num_partitions' is the number of files in the set, one
+        per writing rank. 'num_directions' (D) and 'num_groups' (G) are the counts of the entry's
+        groupset, and 'first_group' its first group.
+
+        'mapping' holds the face geometry, the same for every groupset of a tag. Faces are listed in
+        file order with 'cell_ids' and 'num_face_nodes'; 'nodes_x', 'nodes_y', 'nodes_z', and
+        'fe_shape' (the face integral of each node's shape function) list the nodes of each face in
+        turn; 'normals' holds the outward normal of each face's cell, three components per face; and
+        'M_ij' the face mass matrix of each face in turn, row-major by face node. Face integrals
+        include the angular extent of curvilinear coordinates. The 'cell_map' maps face centroids,
+        with 'centroid_origin' subtracted before each coordinate is divided by 'centroid_spacing'
+        (1e-9 times the global mesh extent) and rounded to an integer, to the face index. The same
+        face has the same key from either side of an interior surface and in every file for the same
+        mesh.
+
+        'data' holds the groupset's directions 'omega' (three components per direction) and
+        quadrature 'weights', and the angular flux 'psi' of the face's cell: the value at node k
+        (counted over the faces in turn), direction d, and group g is ``psi[(k * D + d) * G + g]``.
+        The cosine of direction d with face f is the dot product of 'omega' d and 'normals' f. For a
+        boundary tag, 'upwind_psi' (empty for an interior tag), laid out like 'psi', holds the face
+        value upwind of each direction along the direction the data transport in (Omega for forward
+        data, -Omega for adjoint data): 'psi' for a direction leaving the domain, and the
+        boundary-condition value the sweep used for one entering it.
 
     Notes
     -----

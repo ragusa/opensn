@@ -87,139 +87,6 @@ PartitionFileName(const std::string& file_base, const std::uint64_t id)
   return file_base + std::to_string(id) + ".h5";
 }
 
-/// Attributes that every file of a surface angular-flux file set must share.
-struct FileSetHeader
-{
-  std::uint64_t num_partitions = 0;
-  std::uint64_t file_set_id = 0;
-  bool adjoint = false;
-  std::array<double, 3> centroid_origin = {0.0, 0.0, 0.0};
-  double centroid_spacing = 0.0;
-  std::vector<std::uint64_t> num_dirs;
-  std::vector<std::uint64_t> num_groups;
-  std::vector<std::uint64_t> first_groups;
-  /// Per surface, 1 if the tag is one side of an interior surface and 0 for a boundary.
-  std::vector<std::uint64_t> interior;
-};
-
-/**
- * Return the header of one file read by `DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes`,
- * whose entries are ordered by groupset, then by surface.
- */
-FileSetHeader
-GetFileHeader(const std::vector<SurfaceAngularFlux>& file_fluxes, const size_t num_surfaces)
-{
-  FileSetHeader header;
-  const auto& first = file_fluxes.front();
-  header.num_partitions = first.num_partitions;
-  header.file_set_id = first.file_set_id;
-  header.adjoint = first.adjoint;
-  header.centroid_origin = first.mapping.centroid_origin;
-  header.centroid_spacing = first.mapping.centroid_spacing;
-  for (size_t i = 0; i < file_fluxes.size(); i += num_surfaces)
-  {
-    header.num_dirs.push_back(file_fluxes[i].num_directions);
-    header.num_groups.push_back(file_fluxes[i].num_groups);
-    header.first_groups.push_back(file_fluxes[i].first_group);
-  }
-  for (size_t s = 0; s < num_surfaces; ++s)
-    header.interior.push_back(file_fluxes[s].interior ? 1U : 0U);
-  return header;
-}
-
-/// Return a description of how `header` differs from `reference`, or an empty string.
-std::string
-DescribeHeaderMismatch(const FileSetHeader& reference, const FileSetHeader& header)
-{
-  if (header.num_partitions != reference.num_partitions)
-    return "it records " + std::to_string(header.num_partitions) +
-           " partitions, but partition 0 records " + std::to_string(reference.num_partitions);
-  if (header.file_set_id != reference.file_set_id)
-    return "it was written by another WriteSurfaceAngularFluxes call than partition 0";
-  if (header.adjoint != reference.adjoint)
-    return "its adjoint flag differs from partition 0";
-  if (header.centroid_origin != reference.centroid_origin or
-      header.centroid_spacing != reference.centroid_spacing)
-    return "its centroid origin or spacing differs from partition 0";
-  if (header.num_dirs != reference.num_dirs or header.num_groups != reference.num_groups or
-      header.first_groups != reference.first_groups)
-    return "its groupset, direction, or group counts or group ranges differ from partition 0";
-  if (header.interior != reference.interior)
-    return "its surface kinds (boundary or interior side) differ from partition 0";
-  return {};
-}
-
-/// Broadcast `header` from rank 0 to every rank of `comm`. Collective.
-void
-BroadcastFileSetHeader(const mpi::Communicator& comm, FileSetHeader& header)
-{
-  std::vector<std::uint64_t> ints;
-  std::vector<double> reals;
-  if (comm.rank() == 0)
-  {
-    ints = {header.num_partitions, header.file_set_id, header.adjoint ? 1U : 0U};
-    ints.insert(ints.end(), header.num_dirs.begin(), header.num_dirs.end());
-    ints.insert(ints.end(), header.num_groups.begin(), header.num_groups.end());
-    ints.insert(ints.end(), header.first_groups.begin(), header.first_groups.end());
-    reals = {header.centroid_origin[0],
-             header.centroid_origin[1],
-             header.centroid_origin[2],
-             header.centroid_spacing};
-  }
-  BroadcastVector(comm, ints, 0);
-  BroadcastVector(comm, reals, 0);
-  BroadcastVector(comm, header.interior, 0);
-
-  header.num_partitions = ints[0];
-  header.file_set_id = ints[1];
-  header.adjoint = ints[2] != 0;
-  const auto num_groupsets = static_cast<std::ptrdiff_t>((ints.size() - 3) / 3);
-  const auto begin = ints.begin() + 3;
-  header.num_dirs.assign(begin, begin + num_groupsets);
-  header.num_groups.assign(begin + num_groupsets, begin + 2 * num_groupsets);
-  header.first_groups.assign(begin + 2 * num_groupsets, ints.end());
-  header.centroid_origin = {reals[0], reals[1], reals[2]};
-  header.centroid_spacing = reals[3];
-}
-
-/**
- * Return the quadrature of every groupset of surface `surface_index` of one file, which must have
- * faces. The writer stores the directions and weights at every face node; check that they agree.
- */
-std::vector<SurfaceQuadrature>
-ExtractQuadrature(const std::vector<SurfaceAngularFlux>& file_fluxes,
-                  const size_t surface_index,
-                  const size_t num_surfaces,
-                  const std::string& context)
-{
-  std::vector<SurfaceQuadrature> quadratures(file_fluxes.size() / num_surfaces);
-  for (size_t gs = 0; gs < quadratures.size(); ++gs)
-  {
-    const auto& data = file_fluxes[gs * num_surfaces + surface_index].data;
-    auto& quadrature = quadratures[gs];
-    quadrature.num_dirs = file_fluxes[gs * num_surfaces + surface_index].num_directions;
-    quadrature.num_groups = file_fluxes[gs * num_surfaces + surface_index].num_groups;
-    quadrature.first_group = file_fluxes[gs * num_surfaces + surface_index].first_group;
-    const auto num_dirs = static_cast<std::ptrdiff_t>(quadrature.num_dirs);
-    quadrature.omegas.assign(data.omega.begin(), data.omega.begin() + 3 * num_dirs);
-    quadrature.weights.assign(data.wt_d.begin(), data.wt_d.begin() + num_dirs);
-
-    const auto num_node_dirs = data.wt_d.size();
-    for (size_t i = 0; i < num_node_dirs; ++i)
-    {
-      const auto d = i % quadrature.num_dirs;
-      bool same = std::abs(data.wt_d[i] - quadrature.weights[d]) <= same_problem_tolerance;
-      for (size_t c = 0; c < 3; ++c)
-        same = same and std::abs(data.omega[3 * i + c] - quadrature.omegas[3 * d + c]) <=
-                          same_problem_tolerance;
-      OpenSnLogicalErrorIf(not same,
-                           "The quadrature varies across the face nodes of groupset " +
-                             std::to_string(gs) + " of " + context + ".");
-    }
-  }
-  return quadratures;
-}
-
 bool
 SameQuadrature(const std::vector<SurfaceQuadrature>& a, const std::vector<SurfaceQuadrature>& b)
 {
@@ -240,6 +107,111 @@ SameQuadrature(const std::vector<SurfaceQuadrature>& a, const std::vector<Surfac
         not Close(a[gs].weights, b[gs].weights))
       return false;
   return true;
+}
+
+/// Attributes that every file of a surface angular-flux file set must share.
+struct FileSetHeader
+{
+  std::uint64_t num_partitions = 0;
+  std::uint64_t file_set_id = 0;
+  bool adjoint = false;
+  std::array<double, 3> centroid_origin = {0.0, 0.0, 0.0};
+  double centroid_spacing = 0.0;
+  /// Quadrature, group count, and first group of each groupset.
+  std::vector<SurfaceQuadrature> quadratures;
+  /// Per surface, 1 if the tag is one side of an interior surface and 0 for a boundary.
+  std::vector<std::uint64_t> interior;
+};
+
+/**
+ * Return the header of one file read by `DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes`,
+ * whose entries are ordered by groupset, then by surface.
+ */
+FileSetHeader
+GetFileHeader(const std::vector<SurfaceAngularFlux>& file_fluxes, const size_t num_surfaces)
+{
+  FileSetHeader header;
+  const auto& first = file_fluxes.front();
+  header.num_partitions = first.num_partitions;
+  header.file_set_id = first.file_set_id;
+  header.adjoint = first.adjoint;
+  header.centroid_origin = first.mapping->centroid_origin;
+  header.centroid_spacing = first.mapping->centroid_spacing;
+  for (size_t i = 0; i < file_fluxes.size(); i += num_surfaces)
+    header.quadratures.push_back({file_fluxes[i].num_directions,
+                                  file_fluxes[i].num_groups,
+                                  file_fluxes[i].first_group,
+                                  file_fluxes[i].data.omega,
+                                  file_fluxes[i].data.weights});
+  for (size_t s = 0; s < num_surfaces; ++s)
+    header.interior.push_back(file_fluxes[s].interior ? 1U : 0U);
+  return header;
+}
+
+/// Return a description of how `header` differs from `reference`, or an empty string.
+std::string
+DescribeHeaderMismatch(const FileSetHeader& reference, const FileSetHeader& header)
+{
+  if (header.num_partitions != reference.num_partitions)
+    return "it records " + std::to_string(header.num_partitions) +
+           " partitions, but partition 0 records " + std::to_string(reference.num_partitions);
+  if (header.file_set_id != reference.file_set_id)
+    return "it was written by another WriteSurfaceAngularFluxes call than partition 0";
+  if (header.adjoint != reference.adjoint)
+    return "its adjoint flag differs from partition 0";
+  if (header.centroid_origin != reference.centroid_origin or
+      header.centroid_spacing != reference.centroid_spacing)
+    return "its centroid origin or spacing differs from partition 0";
+  if (not SameQuadrature(header.quadratures, reference.quadratures))
+    return "its groupsets, quadratures, or group ranges differ from partition 0";
+  if (header.interior != reference.interior)
+    return "its surface kinds (boundary or interior side) differ from partition 0";
+  return {};
+}
+
+/// Broadcast `header` from rank 0 to every rank of `comm`. Collective.
+void
+BroadcastFileSetHeader(const mpi::Communicator& comm, FileSetHeader& header)
+{
+  std::vector<std::uint64_t> ints;
+  std::vector<double> reals;
+  if (comm.rank() == 0)
+  {
+    ints = {header.num_partitions, header.file_set_id, header.adjoint ? 1U : 0U};
+    reals = {header.centroid_origin[0],
+             header.centroid_origin[1],
+             header.centroid_origin[2],
+             header.centroid_spacing};
+    for (const auto& quadrature : header.quadratures)
+    {
+      ints.insert(ints.end(), {quadrature.num_dirs, quadrature.num_groups, quadrature.first_group});
+      reals.insert(reals.end(), quadrature.omegas.begin(), quadrature.omegas.end());
+      reals.insert(reals.end(), quadrature.weights.begin(), quadrature.weights.end());
+    }
+  }
+  BroadcastVector(comm, ints, 0);
+  BroadcastVector(comm, reals, 0);
+  BroadcastVector(comm, header.interior, 0);
+
+  header.num_partitions = ints[0];
+  header.file_set_id = ints[1];
+  header.adjoint = ints[2] != 0;
+  header.centroid_origin = {reals[0], reals[1], reals[2]};
+  header.centroid_spacing = reals[3];
+  header.quadratures.resize((ints.size() - 3) / 3);
+  auto real = reals.begin() + 4;
+  for (size_t gs = 0; gs < header.quadratures.size(); ++gs)
+  {
+    auto& quadrature = header.quadratures[gs];
+    quadrature.num_dirs = ints[3 + 3 * gs];
+    quadrature.num_groups = ints[4 + 3 * gs];
+    quadrature.first_group = ints[5 + 3 * gs];
+    const auto num_dirs = static_cast<std::ptrdiff_t>(quadrature.num_dirs);
+    quadrature.omegas.assign(real, real + 3 * num_dirs);
+    real += 3 * num_dirs;
+    quadrature.weights.assign(real, real + num_dirs);
+    real += num_dirs;
+  }
 }
 
 /// Faces read from this rank's files, in read order, before they are sent to their owners.
@@ -279,14 +251,13 @@ public:
   TagFaces(const std::vector<SurfaceAngularFlux>& file_fluxes,
            const size_t surface_index,
            const size_t num_surfaces,
-           const std::vector<SurfaceQuadrature>& quadratures,
-           std::string context)
-    : quadratures_(quadratures), context_(std::move(context))
+           const std::vector<SurfaceQuadrature>& quadratures)
+    : quadratures_(quadratures)
   {
     for (size_t gs = 0; gs < quadratures.size(); ++gs)
       groupset_entries_.push_back(&file_fluxes[gs * num_surfaces + surface_index]);
     interior_ = groupset_entries_.front()->interior;
-    const auto& mapping = groupset_entries_.front()->mapping;
+    const auto& mapping = *groupset_entries_.front()->mapping;
     keys_.resize(mapping.cell_ids.size());
     for (const auto& [key, face] : mapping.cell_map)
       keys_[face] = key;
@@ -328,7 +299,7 @@ private:
   /// Copy faces [next_face_, end) into `chunk`.
   void CopyFacesToChunk(const std::uint64_t end, FaceChunk& chunk) const
   {
-    const auto& mapping = groupset_entries_.front()->mapping;
+    const auto& mapping = *groupset_entries_.front()->mapping;
     for (std::uint64_t f = next_face_; f < end; ++f)
     {
       chunk.keys.push_back(keys_[f]);
@@ -338,8 +309,7 @@ private:
                             {mapping.nodes_x[node], mapping.nodes_y[node], mapping.nodes_z[node]});
     }
 
-    // The writer stores the same face mass matrices in every groupset.
-    const auto& mass = groupset_entries_.front()->data.mass_matrix;
+    const auto& mass = mapping.mass_matrix;
     chunk.mass.insert(chunk.mass.end(),
                       mass.begin() + static_cast<std::ptrdiff_t>(mass_offset_[next_face_]),
                       mass.begin() + static_cast<std::ptrdiff_t>(mass_offset_[end]));
@@ -355,20 +325,14 @@ private:
       // directions that enter the domain.
       const auto& face_psi = interior_ ? data.psi : data.upwind_psi;
 
-      // The cosine depends only on the face normal; keep the first node's row of each face.
+      // The cosine of each direction with the face normal.
+      const auto& omegas = quadratures_[gs].omegas;
       for (std::uint64_t f = next_face_; f < end; ++f)
       {
-        const auto row = node_offset_[f];
-        for (auto node = row + 1; node < node_offset_[f + 1]; ++node)
-          for (std::uint64_t d = 0; d < num_dirs; ++d)
-            OpenSnLogicalErrorIf(
-              std::abs(data.mu[node * num_dirs + d] - data.mu[row * num_dirs + d]) >
-                same_problem_tolerance,
-              "Direction cosines vary across the nodes of face " + std::to_string(f) +
-                " of groupset " + std::to_string(gs) + " of " + context_ + ".");
-        chunk.mu[gs].insert(chunk.mu[gs].end(),
-                            data.mu.begin() + static_cast<std::ptrdiff_t>(row * num_dirs),
-                            data.mu.begin() + static_cast<std::ptrdiff_t>((row + 1) * num_dirs));
+        const double* normal = &mapping.normals[3 * f];
+        for (std::uint64_t d = 0; d < num_dirs; ++d)
+          chunk.mu[gs].push_back(omegas[3 * d] * normal[0] + omegas[3 * d + 1] * normal[1] +
+                                 omegas[3 * d + 2] * normal[2]);
       }
       chunk.psi[gs].insert(
         chunk.psi[gs].end(),
@@ -378,7 +342,6 @@ private:
   }
 
   const std::vector<SurfaceQuadrature>& quadratures_;
-  const std::string context_;
   /// Entries of the tag, one per groupset.
   std::vector<const SurfaceAngularFlux*> groupset_entries_;
   bool interior_ = false;
@@ -618,21 +581,15 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
   BroadcastFileSetHeader(comm, header);
   const auto num_surfaces = surface_tags.size();
   const auto num_partitions = header.num_partitions;
-  const auto num_groupsets = header.num_dirs.size();
+  const auto num_groupsets = header.quadratures.size();
 
   DistributedSurfaceData data;
   data.adjoint = header.adjoint;
   data.num_partitions = num_partitions;
   data.centroid_origin = header.centroid_origin;
   data.centroid_spacing = header.centroid_spacing;
-  // Packing needs only the counts; the directions and weights are agreed on after reading.
-  data.groupsets.resize(num_groupsets);
-  for (size_t gs = 0; gs < num_groupsets; ++gs)
-  {
-    data.groupsets[gs].num_dirs = header.num_dirs[gs];
-    data.groupsets[gs].num_groups = header.num_groups[gs];
-    data.groupsets[gs].first_group = header.first_groups[gs];
-  }
+  // Every file of the set must have this quadrature; see DescribeHeaderMismatch.
+  data.groupsets = header.quadratures;
   for (size_t s = 0; s < num_surfaces; ++s)
   {
     auto& shard = data.surfaces[surface_tags[s]];
@@ -644,7 +601,6 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
   // owners before the next file is read. Every rank runs the loop max_files_per_rank times, so
   // ranks without a file in a pass still join its collectives.
   std::string error;
-  std::optional<std::vector<SurfaceQuadrature>> local_quadrature;
   std::vector<std::uint64_t> faces_sent(num_surfaces, 0);
   const auto num_ranks_u64 = static_cast<std::uint64_t>(num_ranks);
   const auto max_files_per_rank = (num_partitions + num_ranks_u64 - 1) / num_ranks_u64;
@@ -672,21 +628,6 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
                                  .append("."));
         }
       }
-
-      // Every non-empty tag of every file must use the same quadrature per groupset.
-      for (size_t s = 0; s < num_surfaces and not file_fluxes.empty(); ++s)
-      {
-        if (file_fluxes[s].mapping.cell_ids.empty())
-          continue;
-        auto quadrature =
-          ExtractQuadrature(file_fluxes, s, num_surfaces, surface_tags[s] + " in " + file_name);
-        if (not local_quadrature.has_value())
-          local_quadrature = std::move(quadrature);
-        else
-          OpenSnLogicalErrorIf(not SameQuadrature(*local_quadrature, quadrature),
-                               "The quadrature of " + surface_tags[s] + " in " + file_name +
-                                 " differs from the rest of the file set.");
-      }
     }
     catch (const std::exception& exception)
     {
@@ -703,8 +644,7 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
       {
         try
         {
-          faces.emplace(
-            file_fluxes, s, num_surfaces, data.groupsets, surface_tags[s] + " in " + file_name);
+          faces.emplace(file_fluxes, s, num_surfaces, data.groupsets);
         }
         catch (const std::exception& exception)
         {
@@ -762,33 +702,6 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
                          operation + " failed: " + std::to_string(global_face_counts[2 * s + 1]) +
                            " faces of " + surface_tags[s] + " were sent, but " +
                            std::to_string(global_face_counts[2 * s]) + " arrived.");
-  }
-
-  // All ranks adopt the quadrature of the lowest rank that read one and check their own against it.
-  {
-    int quadrature_root = local_quadrature.has_value() ? rank : num_ranks;
-    comm.all_reduce(quadrature_root, mpi::op::min<int>());
-    for (size_t gs = 0; gs < num_groupsets; ++gs)
-    {
-      auto& quadrature = data.groupsets[gs];
-      if (rank == quadrature_root)
-        quadrature = (*local_quadrature)[gs];
-      else
-      {
-        quadrature.omegas.resize(3 * quadrature.num_dirs);
-        quadrature.weights.resize(quadrature.num_dirs);
-      }
-      comm.broadcast(
-        quadrature.omegas.data(), static_cast<int>(quadrature.omegas.size()), quadrature_root);
-      comm.broadcast(
-        quadrature.weights.data(), static_cast<int>(quadrature.weights.size()), quadrature_root);
-    }
-    ThrowIfAnyRankFailed(comm,
-                         local_quadrature.has_value() and
-                             not SameQuadrature(*local_quadrature, data.groupsets)
-                           ? "the quadrature differs across the file set"
-                           : "",
-                         operation);
   }
 
   for (const auto& surface_tag : surface_tags)

@@ -229,8 +229,9 @@ if __name__ == "__main__":
     for problem_prefix, adjoint in ((prefix + "F_", False), (prefix + "B_", True)):
         for entry in forward.ReadSurfaceAngularFluxes(problem_prefix, ["ymin"]):
             values = entry["data"]
+            mapping = entry["mapping"]
             # Ranks without ymin faces read empty arrays.
-            if not values["mu"]:
+            if not values["psi"]:
                 continue
             num_dirs = entry["num_directions"]
             groups = entry["num_groups"]
@@ -244,10 +245,14 @@ if __name__ == "__main__":
                         key=lambda r: sum((omega[3 * r + c] - target[c]) ** 2 for c in range(3)),
                     )
                 )
-            num_nodes = len(values["mu"]) // num_dirs
-            for node in range(num_nodes):
+            # The face of each node, for its normal.
+            node_faces = [
+                f for f, n in enumerate(mapping["num_face_nodes"]) for _ in range(n)
+            ]
+            for node, face in enumerate(node_faces):
+                normal = mapping["normals"][3 * face : 3 * face + 3]
                 for d in range(num_dirs):
-                    mu = values["mu"][node * num_dirs + d]
+                    mu = sum(omega[3 * d + c] * normal[c] for c in range(3))
                     if not (mu > 0.0 if adjoint else mu < 0.0):
                         continue
                     for g in range(groups):

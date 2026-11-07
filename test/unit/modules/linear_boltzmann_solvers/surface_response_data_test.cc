@@ -135,6 +135,8 @@ struct SetSpec
   bool reverse_directions = false;
   /// Factor applied to the fixture quadrature weights.
   double weight_scale = 1.0;
+  /// A file whose quadrature weights are doubled, unlike the rest of the set.
+  std::optional<size_t> odd_quadrature_file;
   /// Drop the last angular-flux value of every non-empty tag, so its size is inconsistent.
   bool truncate_flux = false;
   /// Store a NaN as the first angular-flux value of every non-empty tag.
@@ -180,11 +182,15 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
     {
       const auto& faces = tag.faces_per_file[file_id];
       std::vector<std::uint64_t> cell_ids, num_face_nodes;
-      std::vector<double> x, y, z;
+      std::vector<double> x, y, z, normals, fe_shape, mass;
       for (const auto face : faces)
       {
         cell_ids.push_back(static_cast<std::uint64_t>(face));
         num_face_nodes.push_back(2);
+        normals.insert(normals.end(), {tag.normal_x, 0.0, 0.0});
+        fe_shape.insert(fe_shape.end(), {face_length / 2.0, face_length / 2.0});
+        mass.insert(mass.end(),
+                    {face_length / 3.0, face_length / 6.0, face_length / 6.0, face_length / 3.0});
         std::array<double, 2> ys = {face * face_length, (face + 1) * face_length};
         if (spec.reverse_nodes)
           std::swap(ys[0], ys[1]);
@@ -207,6 +213,9 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
       ASSERT_TRUE(H5WriteDataset1D(id, mesh + "/nodes_x", x));
       ASSERT_TRUE(H5WriteDataset1D(id, mesh + "/nodes_y", y));
       ASSERT_TRUE(H5WriteDataset1D(id, mesh + "/nodes_z", z));
+      ASSERT_TRUE(H5WriteDataset1D(id, mesh + "/normals", normals));
+      ASSERT_TRUE(H5WriteDataset1D(id, mesh + "/fe_shape", fe_shape));
+      ASSERT_TRUE(H5WriteDataset1D(id, mesh + "/M_ij", mass));
     }
 
     for (size_t gs = 0; gs < groups_per_groupset.size(); ++gs)
@@ -223,10 +232,20 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
           first_group += groups_per_groupset[prior];
         ASSERT_TRUE(H5CreateAttribute(id, group + "/first_group", first_group));
       }
+      std::vector<double> omega, wt;
+      for (size_t k = 0; k < directions.size(); ++k)
+      {
+        const auto d = spec.reverse_directions ? directions.size() - 1 - k : k;
+        omega.insert(omega.end(), directions[d].begin(), directions[d].end());
+        const double odd = spec.odd_quadrature_file == file_id ? 2.0 : 1.0;
+        wt.push_back(odd * spec.weight_scale * weights[d]);
+      }
+      ASSERT_TRUE(H5WriteDataset1D(id, group + "/omega", omega));
+      ASSERT_TRUE(H5WriteDataset1D(id, group + "/weights", wt));
       for (const auto& tag : spec.tags)
       {
         const bool boundary = not tag.recorded_interior.value_or(tag.side != 'b');
-        std::vector<double> omega, mu, wt, fe_shape, psi, upwind, mass;
+        std::vector<double> psi, upwind;
         for (const auto face : tag.faces_per_file[file_id])
         {
           std::array<double, 2> ys = {face * face_length, (face + 1) * face_length};
@@ -236,10 +255,6 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
             for (size_t k = 0; k < directions.size(); ++k)
             {
               const auto d = spec.reverse_directions ? directions.size() - 1 - k : k;
-              omega.insert(omega.end(), directions[d].begin(), directions[d].end());
-              mu.push_back(directions[d][0] * tag.normal_x);
-              wt.push_back(spec.weight_scale * weights[d]);
-              fe_shape.push_back(face_length / 2.0);
               const double mu_d = directions[d][0] * tag.normal_x;
               const bool enters = spec.adjoint ? mu_d > 0.0 : mu_d < 0.0;
               for (std::uint64_t g = 0; g < groups_per_groupset[gs]; ++g)
@@ -251,8 +266,6 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
                 upwind.push_back(u[0] + u[1] * node_y);
               }
             }
-          mass.insert(mass.end(),
-                      {face_length / 3.0, face_length / 6.0, face_length / 6.0, face_length / 3.0});
         }
         if (spec.truncate_flux and not psi.empty())
           psi.pop_back();
@@ -260,12 +273,7 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
           psi.front() = std::numeric_limits<double>::quiet_NaN();
         const auto surf = group + "/" + tag.name;
         ASSERT_TRUE(H5CreateGroup(id, surf));
-        ASSERT_TRUE(H5WriteDataset1D(id, surf + "/omega", omega));
-        ASSERT_TRUE(H5WriteDataset1D(id, surf + "/mu", mu));
-        ASSERT_TRUE(H5WriteDataset1D(id, surf + "/wt_d", wt));
-        ASSERT_TRUE(H5WriteDataset1D(id, surf + "/fe_shape", fe_shape));
         ASSERT_TRUE(H5WriteDataset1D(id, surf + "/surf_flux", psi));
-        ASSERT_TRUE(H5WriteDataset1D(id, surf + "/M_ij", mass));
         if (boundary and spec.write_upwind)
         {
           if (spec.truncate_flux and not upwind.empty())
@@ -468,6 +476,15 @@ TEST_F(SurfaceResponseDataTest, RejectsFileOfAnotherSet)
                std::logic_error);
 }
 
+TEST_F(SurfaceResponseDataTest, RejectsQuadratureDifferingAcrossFiles)
+{
+  // File 3 of the five has other quadrature weights, so it was not written with the rest.
+  auto spec = ForwardSpec();
+  spec.odd_quadrature_file = 3;
+  EXPECT_THROW(DistributeSurfaceAngularFluxes(Write("odd", spec), all_tags, mpi_comm),
+               std::logic_error);
+}
+
 TEST_F(SurfaceResponseDataTest, RejectsDifferentGroupRanges)
 {
   // Same group counts per groupset, but the adjoint groupsets start one group later.
@@ -646,9 +663,14 @@ TEST_F(SurfaceResponseDataTest, ReaderReturnsOneFileOfTheSet)
       EXPECT_EQ(surf_flux.num_directions, directions.size());
       EXPECT_EQ(surf_flux.num_groups, groups_per_groupset[gs]);
       const auto num_faces = ForwardSpec().tags[s].faces_per_file[0].size();
-      EXPECT_EQ(surf_flux.mapping.cell_ids.size(), num_faces);
-      EXPECT_EQ(surf_flux.mapping.cell_map.size(), num_faces);
-      EXPECT_EQ(surf_flux.mapping.cell_stride.size(), num_faces);
+      EXPECT_EQ(surf_flux.mapping->cell_ids.size(), num_faces);
+      EXPECT_EQ(surf_flux.mapping->cell_map.size(), num_faces);
+      EXPECT_EQ(surf_flux.mapping->normals.size(), 3 * num_faces);
+      EXPECT_EQ(surf_flux.mapping->mass_matrix.size(), 4 * num_faces);
+      // The face geometry is shared by the groupsets of a tag.
+      EXPECT_EQ(surf_flux.mapping, surf_fluxes[s].mapping);
+      EXPECT_EQ(surf_flux.data.omega.size(), 3 * directions.size());
+      EXPECT_EQ(surf_flux.data.weights.size(), directions.size());
       EXPECT_EQ(surf_flux.data.psi.size(),
                 2 * num_faces * directions.size() * surf_flux.num_groups);
     }
