@@ -145,6 +145,13 @@ public:
    * problem the writer requires the physical orientation that an adjoint solve leaves, so the
    * stored angular flux is the adjoint flux for the listed direction and forward and adjoint data
    * with the same indices refer to the same direction.
+   *
+   * `upwind_psi`, read for boundary tags only and laid out like `psi`, holds the face value upwind
+   * of each direction along the direction the data transport in (`Omega_d` for forward data,
+   * `-Omega_d` for adjoint data): the cell value of `psi` for a direction that leaves the domain
+   * and the boundary-condition value the sweep used for one that enters it (0 for vacuum, the
+   * incoming flux for isotropic and arbitrary boundaries, the reflected angular flux for
+   * reflecting boundaries). It is empty for interior tags.
    */
   struct SurfaceData
   {
@@ -154,6 +161,7 @@ public:
     std::vector<double> mass_matrix;
     std::vector<double> fe_shape;
     std::vector<double> psi;
+    std::vector<double> upwind_psi;
     std::vector<uint64_t> node_index;
     std::vector<uint64_t> dir_index;
   };
@@ -195,7 +203,9 @@ public:
    * its rank's tags, and DistributeSurfaceAngularFluxes requires every requested tag in every file
    * of a set. Plane-matching tolerances are relative to the global mesh extent. Each rank writes
    * `<file_base><rank>.h5`, which records whether the problem is in adjoint mode and the number of
-   * files written (`num_partitions`).
+   * files written (`num_partitions`). Boundary tags also store the upwind face values
+   * (`upwind_flux`; see SurfaceData), taken from the problem's boundary conditions for the
+   * directions that enter the domain.
    *
    * Requires `options.save_angular_flux=true`. An adjoint problem must hold its solution in the
    * physical orientation (`IsAdjointSolutionReoriented()`), which an adjoint steady-state or

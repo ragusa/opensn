@@ -120,8 +120,14 @@ WrapResEval(py::module& response)
     :math:`\psi^\dagger_{f,j,d,g}` the forward and adjoint angular fluxes at nodes :math:`i` and
     :math:`j` of face :math:`f`.
 
-    For a boundary, :math:`n_f` is the outward normal, :math:`D_f` holds the outflow directions
-    (:math:`\mu_{f,d} > 0`), and both fluxes are those of the face's cell.
+    For a boundary, :math:`n_f` is the outward normal and :math:`D_f` holds the outflow directions
+    (:math:`\mu_{f,d} > 0`). The forward flux is that of the face's cell, and the adjoint flux is
+    the adjoint boundary-condition value (0 for a vacuum boundary), which is upwind for the adjoint
+    because it travels along :math:`-\Omega_d`. This is the boundary term of the discrete adjoint
+    identity, so a boundary response is exact for the discretization, like an interior surface
+    response: for a detector outside the domain, represented by an adjoint boundary source, it
+    equals the detector response. The forward inflow directions are not included; the response to
+    a forward boundary source is given by :py:meth:`EvaluateResponse`.
 
     The surface files record whether each tag is a boundary or one side of an interior surface,
     so a boundary is evaluated as a boundary whatever its name, including names ending in ``_u``

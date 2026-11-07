@@ -44,7 +44,10 @@ struct SurfaceShard
   {
     /// Direction cosine with the face normal, ordered by face and direction.
     std::vector<double> mu;
-    /// Angular flux, ordered by face, face node, direction, and group.
+    /// Angular flux, ordered by face, face node, direction, and group. For an interior tag, the
+    /// values of the face's cell; for a boundary tag, the upwind values written by
+    /// WriteSurfaceAngularFluxes (`upwind_flux`), which take the boundary condition for the
+    /// directions that enter the domain.
     std::vector<double> psi;
   };
 
@@ -168,7 +171,12 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
  * forward data define the surfaces, classified by the kind the writer records for each tag
  * (SurfaceShard::interior), not by its name:
  * - A boundary: n_f is the outward normal, D_f the outflow directions (mu_{f,d} > 0), and both
- *   fluxes are those of the face's cell, from the boundary tag of each data set.
+ *   fluxes are upwind face values from the boundary tag of each data set: the forward flux of the
+ *   face's cell, and the adjoint boundary-condition value (0 for a vacuum boundary), which is
+ *   upwind for the adjoint because it travels along -Omega_d. This is the boundary term of the
+ *   discrete adjoint identity, so it is exact for the discretization like an interior surface. The
+ *   forward inflow directions, which carry a forward boundary source, are not included; their
+ *   response is that of EvaluateResponse with boundary sources.
  * - An interior surface, with both interior tags `X_u` and `X_d` in the forward data: the faces are
  * those of `X_u`, n_f is the `X_u` normal (the positive axis), and D_f holds every direction. The
  * forward flux comes from the side upwind of the direction (`X_u` for mu_{f,d} > 0, `X_d` for

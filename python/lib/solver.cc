@@ -666,6 +666,7 @@ WrapLBS(py::module& slv)
         data["M_ij"] = surface_flux.data.mass_matrix;
         data["fe_shape"] = surface_flux.data.fe_shape;
         data["psi"] = surface_flux.data.psi;
+        data["upwind_psi"] = surface_flux.data.upwind_psi;
         data["node_index"] = surface_flux.data.node_index;
         data["dir_index"] = surface_flux.data.dir_index;
 
@@ -710,7 +711,12 @@ WrapLBS(py::module& slv)
         'interior' is True when the tag is one side of an interior surface and False for a
         boundary. 'num_partitions' is
         the number of files in the set, one per writing rank. 'num_directions' and 'num_groups' are
-        the counts of the entry's groupset. The 'cell_map' in 'mapping' maps
+        the counts of the entry's groupset. In 'data', 'psi'
+        holds the angular flux of the face's cell; for a boundary tag, 'upwind_psi' (empty for an
+        interior tag) holds the face value upwind of each direction along the direction the data
+        transport in (Omega for forward data, -Omega for adjoint data): 'psi' for a direction
+        leaving the domain, and the boundary-condition value the sweep used for one entering it.
+        The 'cell_map' in 'mapping' maps
         face centroids, with 'centroid_origin' subtracted before each coordinate is divided by
         'centroid_spacing' (1e-9 times the global mesh extent) and rounded to an integer, to the
         surface face index. The same face has the same key from either side of an interior surface

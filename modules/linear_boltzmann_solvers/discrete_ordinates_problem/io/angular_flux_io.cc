@@ -3,6 +3,7 @@
 
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/io/discrete_ordinates_problem_io.h"
 #include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/discrete_ordinates_problem.h"
+#include "modules/linear_boltzmann_solvers/discrete_ordinates_problem/sweep/boundary/sweep_boundary.h"
 #include "framework/logging/log.h"
 #include "framework/runtime.h"
 #include "framework/mesh/mesh/mesh.h"
@@ -15,6 +16,7 @@
 #include <cmath>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <set>
 #include <tuple>
 
@@ -704,6 +706,9 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
   struct SurfaceFaceInfo
   {
     uint64_t cell_local_id;
+    unsigned int face_index;
+    /// Boundary ID of a boundary face; unset for a face of an interior surface.
+    std::optional<uint64_t> boundary_id;
     std::string surface_name;
     Vector3 normal;
     std::vector<size_t> node_indices;
@@ -728,6 +733,7 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
     {
       const auto& face = cell->faces[f];
       bool is_surface = false;
+      std::optional<uint64_t> boundary_id;
       std::string surface_name;
 
       // Interior surface mapping
@@ -756,6 +762,7 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
         if (tag != bndry_tags.end())
         {
           surface_name = tag->second;
+          boundary_id = face.neighbor_id;
           is_surface = true;
         }
       }
@@ -764,7 +771,14 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
         continue;
 
       const auto num_face_nodes = cell_mapping.GetNumFaceNodes(f);
-      SurfaceFaceInfo surface_face{cell->local_id, surface_name, face.normal, {}, {}, {}};
+      SurfaceFaceInfo surface_face{cell->local_id,
+                                   static_cast<unsigned int>(f),
+                                   boundary_id,
+                                   surface_name,
+                                   face.normal,
+                                   {},
+                                   {},
+                                   {}};
       surface_face.node_indices.reserve(num_face_nodes);
       surface_face.fe_shape.reserve(num_face_nodes);
       surface_face.mass_matrix.reserve(num_face_nodes * num_face_nodes);
@@ -834,10 +848,61 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
     const auto num_gs_dirs = quadrature->GetNumAngles();
     const auto num_gs_groups = groupset.GetNumGroups();
 
+    // On a boundary face, a direction that enters the domain takes its upwind value from the
+    // boundary condition: mu_d < 0 for a forward problem, and mu_d > 0 for an adjoint problem in
+    // physical orientation, whose transport direction is -Omega_d. The boundaries hold the values
+    // the sweeps used, indexed by sweep direction, which for an adjoint problem is the direction
+    // opposite to the physical one.
+    const bool adjoint = do_problem.IsAdjoint();
+    const auto opposite = adjoint ? quadrature->MapOppositeDirections() : std::vector<size_t>{};
+    const auto& sweep_boundaries = do_problem.GetSweepBoundaries();
+    // A reflecting boundary returns the angular flux of the reflected direction, which the stored
+    // angular flux already holds; map each direction to its reflection once per boundary.
+    std::map<uint64_t, std::vector<size_t>> reflected_directions;
+    const auto ReflectedDirections = [&](const uint64_t bid,
+                                         const Vector3& normal) -> const std::vector<size_t>&
+    {
+      auto [it, inserted] = reflected_directions.try_emplace(bid);
+      if (not inserted)
+        return it->second;
+      auto& reflected = it->second;
+      reflected.resize(num_gs_dirs);
+      for (size_t d = 0; d < num_gs_dirs; ++d)
+      {
+        const auto& omega_d = quadrature->GetOmega(d);
+        const auto omega_r = omega_d - normal * (2.0 * omega_d.Dot(normal));
+        bool found = false;
+        for (size_t r = 0; r < num_gs_dirs and not found; ++r)
+          if ((quadrature->GetOmega(r) - omega_r).NormSquare() < 1.0e-16)
+          {
+            reflected[d] = r;
+            found = true;
+          }
+        OpenSnLogicalErrorIf(not found,
+                             "The quadrature of groupset " + std::to_string(groupset_id) +
+                               " has no reflection of direction " + std::to_string(d) +
+                               " on reflecting boundary " + std::to_string(bid) + ".");
+      }
+      return it->second;
+    };
+
     for (const auto& surface_face : surface_faces)
     {
       const auto& cell = grid->GetLocalCell(surface_face.cell_local_id);
       auto& surface_data = data_map[surface_face.surface_name];
+
+      SweepBoundary* boundary = nullptr;
+      const std::vector<size_t>* reflected = nullptr;
+      if (surface_face.boundary_id.has_value())
+      {
+        const auto bid = *surface_face.boundary_id;
+        const auto it = sweep_boundaries.find(bid);
+        OpenSnLogicalErrorIf(it == sweep_boundaries.end(),
+                             "No sweep boundary for boundary ID " + std::to_string(bid) + ".");
+        boundary = it->second.get();
+        if (boundary->IsReflecting())
+          reflected = &ReflectedDirections(bid, surface_face.normal);
+      }
 
       for (size_t fi = 0; fi < surface_face.node_indices.size(); ++fi)
       {
@@ -852,10 +917,30 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
           surface_data.mu.push_back(mu_d);
           surface_data.wt_d.push_back(weight_d);
           surface_data.fe_shape.push_back(surface_face.fe_shape[fi]);
+          const bool enters = adjoint ? mu_d > 0.0 : mu_d < 0.0;
           for (unsigned int g = 0; g < num_gs_groups; ++g)
           {
             const auto dof_map = discretization.MapDOFLocal(cell, i, uk_man, d, g);
             surface_data.psi.push_back(psi[groupset_id][dof_map]);
+            if (boundary == nullptr)
+              continue;
+            if (not enters)
+              surface_data.upwind_psi.push_back(psi[groupset_id][dof_map]);
+            else if (reflected != nullptr)
+              surface_data.upwind_psi.push_back(
+                psi[groupset_id][discretization.MapDOFLocal(cell, i, uk_man, (*reflected)[d], g)]);
+            else
+            {
+              const auto sweep_dir = adjoint ? opposite[d] : d;
+              const double* incoming =
+                boundary->PsiIncoming(static_cast<std::uint32_t>(surface_face.cell_local_id),
+                                      surface_face.face_index,
+                                      static_cast<unsigned int>(fi),
+                                      static_cast<unsigned int>(sweep_dir),
+                                      groupset_id,
+                                      g);
+              surface_data.upwind_psi.push_back(incoming != nullptr ? *incoming : 0.0);
+            }
           }
         }
       }
@@ -893,6 +978,10 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
                            "Failed to write surface angular flux for " + surf_group + ".");
       OpenSnLogicalErrorIf(not H5WriteDataset1D(file.Id(), surf_group + "/M_ij", data.mass_matrix),
                            "Failed to write the mass matrix for " + surf_group + ".");
+      if (interior_tags.count(surf_id) == 0)
+        OpenSnLogicalErrorIf(
+          not H5WriteDataset1D(file.Id(), surf_group + "/upwind_flux", data.upwind_psi),
+          "Failed to write the upwind surface angular flux for " + surf_group + ".");
     }
   }
 }
@@ -1076,6 +1165,9 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
       CheckSize(surf_group + "/surf_flux",
                 CheckedMultiply(num_node_dirs, num_gs_groups[gs], context));
       CheckSize(surf_group + "/M_ij", mass_size);
+      if (not interior_of.at(surface))
+        CheckSize(surf_group + "/upwind_flux",
+                  CheckedMultiply(num_node_dirs, num_gs_groups[gs], context));
     }
 
     OpenSnLogicalErrorIf(
@@ -1120,7 +1212,10 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
           not H5ReadDataset1D<double>(file.Id(), surf_group + "/wt_d", surf_data.wt_d) or
           not H5ReadDataset1D<double>(file.Id(), surf_group + "/M_ij", surf_data.mass_matrix) or
           not H5ReadDataset1D<double>(file.Id(), surf_group + "/fe_shape", surf_data.fe_shape) or
-          not H5ReadDataset1D<double>(file.Id(), surf_group + "/surf_flux", surf_data.psi),
+          not H5ReadDataset1D<double>(file.Id(), surf_group + "/surf_flux", surf_data.psi) or
+          (not interior_of.at(surface) and not H5ReadDataset1D<double>(file.Id(),
+                                                                       surf_group + "/upwind_flux",
+                                                                       surf_data.upwind_psi)),
         "Failed to read the surface angular-flux data of " + group_context + ".");
       // The writer stores finite values. A non-finite cosine would silently drop its direction from
       // a surface response, and a non-finite flux or weight would poison it.
@@ -1129,7 +1224,8 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
                                  &surf_data.wt_d,
                                  &surf_data.mass_matrix,
                                  &surf_data.fe_shape,
-                                 &surf_data.psi})
+                                 &surf_data.psi,
+                                 &surf_data.upwind_psi})
         OpenSnLogicalErrorIf(not std::all_of(values->begin(),
                                              values->end(),
                                              [](const double value)

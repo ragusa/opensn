@@ -272,6 +272,7 @@ public:
   {
     for (size_t gs = 0; gs < quadratures.size(); ++gs)
       groupset_entries_.push_back(&file_fluxes[gs * num_surfaces + surface_index]);
+    interior_ = groupset_entries_.front()->interior;
     const auto& mapping = groupset_entries_.front()->mapping;
     keys_.resize(mapping.cell_ids.size());
     for (const auto& [key, face] : mapping.cell_map)
@@ -337,6 +338,9 @@ private:
       const auto num_dirs = quadratures_[gs].num_dirs;
       const auto stride = num_dirs * quadratures_[gs].num_groups;
       const auto& data = groupset_entries_[gs]->data;
+      // A boundary face carries its upwind values: those of the boundary condition for the
+      // directions that enter the domain.
+      const auto& face_psi = interior_ ? data.psi : data.upwind_psi;
 
       // The cosine depends only on the face normal; keep the first node's row of each face.
       for (std::uint64_t f = next_face_; f < end; ++f)
@@ -355,8 +359,8 @@ private:
       }
       chunk.psi[gs].insert(
         chunk.psi[gs].end(),
-        data.psi.begin() + static_cast<std::ptrdiff_t>(node_offset_[next_face_] * stride),
-        data.psi.begin() + static_cast<std::ptrdiff_t>(node_offset_[end] * stride));
+        face_psi.begin() + static_cast<std::ptrdiff_t>(node_offset_[next_face_] * stride),
+        face_psi.begin() + static_cast<std::ptrdiff_t>(node_offset_[end] * stride));
     }
   }
 
@@ -364,6 +368,7 @@ private:
   const std::string context_;
   /// Entries of the tag, one per groupset.
   std::vector<const SurfaceAngularFlux*> groupset_entries_;
+  bool interior_ = false;
   std::vector<FaceCentroidKey> keys_;
   std::vector<std::uint64_t> node_offset_ = {0};
   std::vector<std::uint64_t> mass_offset_ = {0};

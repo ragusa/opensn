@@ -27,7 +27,9 @@ namespace
  * Each surface tag lies on a plane x = const and consists of num_faces two-node segments of length
  * face_length along y, so the surface spans y in [0, surface_length]. The angular flux is linear in
  * y, so the face mass matrix face_length/6 [[2, 1], [1, 2]] integrates the product of two fluxes
- * exactly and the response has the closed form of ExpectedResponse.
+ * exactly and the response has the closed form of ExpectedResponse. Boundary tags also store upwind
+ * values, which differ from the cell values ('i' instead of the tag's side) for the directions
+ * that enter the domain, so the boundary response checks that the adjoint upwind values are used.
  */
 const int num_faces = 7;
 const double face_length = 0.2;
@@ -38,7 +40,8 @@ const std::vector<double> weights = {0.1, 0.2, 0.3, 0.4};
 /// Groups per groupset.
 const std::vector<std::uint64_t> groups_per_groupset = {2, 1};
 
-/// Angular flux a + b y of a data set (`adjoint`) on one side ('u', 'd', or 'b') of a surface.
+/// Angular flux a + b y of a data set (`adjoint`) on one side ('u', 'd', or 'b') of a surface, or
+/// the boundary-condition value ('i') of a boundary.
 std::array<double, 2>
 FluxCoefficients(const bool adjoint,
                  const char side,
@@ -46,7 +49,7 @@ FluxCoefficients(const bool adjoint,
                  const size_t gs,
                  const std::uint64_t g)
 {
-  const double s = side == 'u' ? 1.0 : (side == 'd' ? 2.0 : 3.0);
+  const double s = side == 'u' ? 1.0 : (side == 'd' ? 2.0 : (side == 'b' ? 3.0 : 4.0));
   const double a = (adjoint ? 0.5 : 1.0) + 0.3 * s + omega[0] + 0.7 * omega[1] +
                    0.1 * static_cast<double>(g) + 0.05 * static_cast<double>(gs);
   const double b = (adjoint ? -0.4 : 0.6) + 0.2 * s * omega[1] + 0.1 * static_cast<double>(g);
@@ -64,7 +67,8 @@ IntegrateProduct(const std::array<double, 2>& f, const std::array<double, 2>& g)
 
 /**
  * Closed-form response of an interior surface with normal +x (`interior`) or a boundary with
- * outward normal +x.
+ * outward normal +x. On the boundary the forward flux leaves the domain (cell value) and the
+ * adjoint flux enters it (boundary-condition value).
  */
 double
 ExpectedResponse(const bool interior)
@@ -81,7 +85,7 @@ ExpectedResponse(const bool interior)
           if (mu > 0.0)
             response += mu * weights[d] *
                         IntegrateProduct(FluxCoefficients(false, 'b', directions[d], gs, g),
-                                         FluxCoefficients(true, 'b', directions[d], gs, g));
+                                         FluxCoefficients(true, 'i', directions[d], gs, g));
         }
         else if (mu > 0.0)
           response += mu * weights[d] *
@@ -116,6 +120,7 @@ struct SetSpec
   bool write_num_partitions = true;
   bool write_adjoint = true;
   bool write_interior = true;
+  bool write_upwind = true;
   double centroid_spacing = 1.0e-9;
   /// Store each face's nodes in reverse order.
   bool reverse_nodes = false;
@@ -199,7 +204,8 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
       ASSERT_TRUE(H5CreateAttribute(id, group + "/num_groups", groups_per_groupset[gs]));
       for (const auto& tag : spec.tags)
       {
-        std::vector<double> omega, mu, wt, fe_shape, psi, mass;
+        const bool boundary = not tag.recorded_interior.value_or(tag.side != 'b');
+        std::vector<double> omega, mu, wt, fe_shape, psi, upwind, mass;
         for (const auto face : tag.faces_per_file[file_id])
         {
           std::array<double, 2> ys = {face * face_length, (face + 1) * face_length};
@@ -213,10 +219,15 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
               mu.push_back(directions[d][0] * tag.normal_x);
               wt.push_back(spec.weight_scale * weights[d]);
               fe_shape.push_back(face_length / 2.0);
+              const double mu_d = directions[d][0] * tag.normal_x;
+              const bool enters = spec.adjoint ? mu_d > 0.0 : mu_d < 0.0;
               for (std::uint64_t g = 0; g < groups_per_groupset[gs]; ++g)
               {
                 const auto c = FluxCoefficients(spec.adjoint, tag.side, directions[d], gs, g);
                 psi.push_back(c[0] + c[1] * node_y);
+                const auto u =
+                  enters ? FluxCoefficients(spec.adjoint, 'i', directions[d], gs, g) : c;
+                upwind.push_back(u[0] + u[1] * node_y);
               }
             }
           mass.insert(mass.end(),
@@ -234,6 +245,12 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
         ASSERT_TRUE(H5WriteDataset1D(id, surf + "/fe_shape", fe_shape));
         ASSERT_TRUE(H5WriteDataset1D(id, surf + "/surf_flux", psi));
         ASSERT_TRUE(H5WriteDataset1D(id, surf + "/M_ij", mass));
+        if (boundary and spec.write_upwind)
+        {
+          if (spec.truncate_flux and not upwind.empty())
+            upwind.pop_back();
+          ASSERT_TRUE(H5WriteDataset1D(id, surf + "/upwind_flux", upwind));
+        }
       }
     }
   }
@@ -398,6 +415,15 @@ TEST_F(SurfaceResponseDataTest, RejectsFilesFromEarlierVersions)
   without_kinds.write_interior = false;
   EXPECT_THROW(DistributeSurfaceAngularFluxes(Write("no_kinds", without_kinds), all_tags, mpi_comm),
                std::logic_error);
+
+  auto without_upwind = AdjointSpec();
+  without_upwind.write_upwind = false;
+  EXPECT_THROW(
+    DistributeSurfaceAngularFluxes(Write("no_upwind", without_upwind), {"right"}, mpi_comm),
+    std::logic_error);
+  // Interior tags have no upwind values.
+  EXPECT_NO_THROW(DistributeSurfaceAngularFluxes(
+    Write("no_upwind_interior", without_upwind), {"plane"}, mpi_comm));
 }
 
 TEST_F(SurfaceResponseDataTest, RejectsMissingFace)

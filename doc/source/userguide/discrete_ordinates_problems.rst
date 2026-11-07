@@ -1002,6 +1002,18 @@ Interior surfaces must lie on cell faces: a plane that cuts through a cell is
 rejected, because the surface would have a hole there and would no longer
 separate the source from the detector.
 
+A boundary, written with ``boundary_surfaces``, is evaluated over its outflow
+directions. The forward flux is that of the boundary cell and the adjoint flux
+is the adjoint boundary-condition value, which the file stores for boundary
+tags: 0 for a vacuum boundary, the incoming flux of an isotropic or arbitrary
+boundary, the reflected flux of a reflecting boundary. This is the boundary term
+of the discrete adjoint identity, so a boundary response is exact for the
+discretization: for a detector outside the domain, represented by an adjoint
+boundary source on that boundary, it equals the detector response, and with a
+vacuum adjoint boundary it is zero. The response to a forward boundary source,
+carried by the inflow directions, is given by
+:py:meth:`pyopensn.response.ResponseEvaluator.EvaluateResponse` instead.
+
 For restartable solver state, prefer the restart options documented above over
 manual angular-flux files. Manual angular-flux files are useful when the
 workflow explicitly wants to manage angular fluxes, but restart dumps also carry
