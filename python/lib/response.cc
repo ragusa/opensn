@@ -136,14 +136,16 @@ WrapResEval(py::module& response)
     :math:`\psi^\dagger_{f,j,d,g}` the forward and adjoint angular fluxes at nodes :math:`i` and
     :math:`j` of face :math:`f`.
 
-    For a boundary, :math:`n_f` is the outward normal and :math:`D_f` holds the outflow directions
-    (:math:`\mu_{f,d} > 0`). The forward flux is that of the face's cell, and the adjoint flux is
-    the adjoint boundary-condition value (0 for a vacuum boundary), which is upwind for the adjoint
-    because it travels along :math:`-\Omega_d`. This is the boundary term of the discrete adjoint
-    identity, so a boundary response is exact for the discretization, like an interior surface
-    response: for a detector outside the domain, represented by an adjoint boundary source, it
-    equals the detector response. The forward inflow directions are not included; the response to
-    a forward boundary source is given by :py:meth:`EvaluateResponse`.
+    For a boundary, :math:`n_f` is the outward normal and :math:`D_f` holds every direction. For the
+    outflow directions (:math:`\mu_{f,d} > 0`), the forward flux is that of the face's cell and the
+    adjoint flux is the adjoint boundary-condition value (0 for a vacuum boundary), which is upwind
+    for the adjoint because it travels along :math:`-\Omega_d`. For the inflow directions, the
+    forward flux is the forward boundary-condition value (0 for a vacuum boundary) and the adjoint
+    flux that of the face's cell. This is the boundary term of the discrete adjoint identity, so a
+    boundary response is exact for the discretization, like an interior surface response: its
+    ``outgoing`` part is the response to the particles leaving through the boundary (for a
+    detector outside the domain, represented by an adjoint boundary source, the detector
+    response), and its ``incoming`` part minus the response to a forward boundary source on it.
 
     The surface files record whether each tag is a boundary or one side of an interior surface,
     so a boundary is evaluated as a boundary whatever its name, including names ending in ``_u``
@@ -170,7 +172,7 @@ WrapResEval(py::module& response)
     :math:`\mu_{f,d} < 0`, which cross back; ``total`` is their sum, :math:`R`. For an interior
     surface ``x20`` requested along its ``_u`` normal (+x), ``outgoing`` is the part carried in the
     +x direction and ``incoming`` minus the part carried in the -x direction. Requested as
-    ``x20_d``, the two parts swap and change sign. For a boundary, ``incoming`` is 0.
+    ``x20_d``, the two parts swap and change sign.
 
     Forward and adjoint directions are paired by equal direction vectors, and the nodes of matched
     faces by location. The responses are also logged at verbosity 1. This call is collective.

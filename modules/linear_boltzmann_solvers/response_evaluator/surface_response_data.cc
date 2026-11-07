@@ -1133,8 +1133,10 @@ ComputeSurfaceResponses(const DistributedSurfaceData& forward,
     std::uint64_t& extra = local_counts[3 * surface_index + 1];
     std::uint64_t& mismatched = local_counts[3 * surface_index + 2];
 
-    // A boundary: the forward faces are the anchor and their outflow directions are summed against
-    // the adjoint faces of the same tag.
+    // A boundary: the forward faces are the anchor and are summed against the adjoint faces of the
+    // same tag. Both hold upwind values, so the outflow directions pair the forward cell value with
+    // the adjoint boundary value and the inflow directions the forward boundary value with the
+    // adjoint cell value.
     if (kind == SurfaceKind::boundary)
     {
       const auto& anchor = forward.surfaces.at(name);
@@ -1168,17 +1170,19 @@ ComputeSurfaceResponses(const DistributedSurfaceData& forward,
           {
             // mu_d w_d: the cosine with the anchor normal times the direction weight.
             const auto direction_factor = mu[dir] * quadrature.weights[dir];
-            if (mu[dir] > 0.0)
-              outgoing += direction_factor * FaceFluxInnerProduct(mass,
-                                                                  num_face_nodes,
-                                                                  forward_psi,
-                                                                  nullptr,
-                                                                  dir,
-                                                                  adjoint_psi,
-                                                                  partner_node_map,
-                                                                  direction_maps[gs][dir],
-                                                                  num_dirs,
-                                                                  quadrature.num_groups);
+            if (mu[dir] == 0.0)
+              continue;
+            (mu[dir] > 0.0 ? outgoing : incoming) +=
+              direction_factor * FaceFluxInnerProduct(mass,
+                                                      num_face_nodes,
+                                                      forward_psi,
+                                                      nullptr,
+                                                      dir,
+                                                      adjoint_psi,
+                                                      partner_node_map,
+                                                      direction_maps[gs][dir],
+                                                      num_dirs,
+                                                      quadrature.num_groups);
           }
         }
       }

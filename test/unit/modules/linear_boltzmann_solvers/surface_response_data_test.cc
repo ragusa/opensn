@@ -67,8 +67,9 @@ IntegrateProduct(const std::array<double, 2>& f, const std::array<double, 2>& g)
 
 /**
  * Closed-form response of an interior surface with normal +x (`interior`) or a boundary with
- * outward normal +x. On the boundary the forward flux leaves the domain (cell value) and the
- * adjoint flux enters it (boundary-condition value).
+ * outward normal +x. On the boundary each flux takes its upwind value: the cell value for the
+ * directions leaving the domain along its transport direction and the boundary-condition value for
+ * those entering it.
  */
 double
 ExpectedResponse(const bool interior)
@@ -81,12 +82,12 @@ ExpectedResponse(const bool interior)
       for (std::uint64_t g = 0; g < groups_per_groupset[gs]; ++g)
       {
         if (not interior)
-        {
-          if (mu > 0.0)
-            response += mu * weights[d] *
-                        IntegrateProduct(FluxCoefficients(false, 'b', directions[d], gs, g),
-                                         FluxCoefficients(true, 'i', directions[d], gs, g));
-        }
+          // Upwind values: the forward cell value and adjoint boundary value for mu > 0, the
+          // forward boundary value and adjoint cell value for mu < 0.
+          response +=
+            mu * weights[d] *
+            IntegrateProduct(FluxCoefficients(false, mu > 0.0 ? 'b' : 'i', directions[d], gs, g),
+                             FluxCoefficients(true, mu > 0.0 ? 'i' : 'b', directions[d], gs, g));
         else if (mu > 0.0)
           response += mu * weights[d] *
                       IntegrateProduct(FluxCoefficients(false, 'u', directions[d], gs, g),
@@ -98,6 +99,22 @@ ExpectedResponse(const bool interior)
       }
     }
   return response;
+}
+
+/// Closed-form incoming (mu < 0) part of the boundary response: the forward boundary value against
+/// the adjoint cell value.
+double
+ExpectedBoundaryIncoming()
+{
+  double incoming = 0.0;
+  for (size_t gs = 0; gs < groups_per_groupset.size(); ++gs)
+    for (size_t d = 0; d < directions.size(); ++d)
+      if (directions[d][0] < 0.0)
+        for (std::uint64_t g = 0; g < groups_per_groupset[gs]; ++g)
+          incoming += directions[d][0] * weights[d] *
+                      IntegrateProduct(FluxCoefficients(false, 'i', directions[d], gs, g),
+                                       FluxCoefficients(true, 'b', directions[d], gs, g));
+  return incoming;
 }
 
 /// Closed-form outgoing (mu > 0) and incoming (mu < 0) parts of the interior surface response
@@ -404,7 +421,11 @@ TEST_F(SurfaceResponseDataTest, MatchesClosedFormAcrossPartitions)
   EXPECT_EQ(surface_responses[0].kind, SurfaceKind::interior);
   EXPECT_EQ(surface_responses[1].name, "right");
   EXPECT_EQ(surface_responses[1].kind, SurfaceKind::boundary);
-  EXPECT_EQ(surface_responses[1].incoming, 0.0);
+  // The boundary's incoming part pairs the forward boundary value with the adjoint cell value.
+  const double boundary_incoming = ExpectedBoundaryIncoming();
+  EXPECT_LT(boundary_incoming, 0.0);
+  EXPECT_NEAR(
+    surface_responses[1].incoming, boundary_incoming, 1.0e-13 * std::abs(boundary_incoming));
 
   // Sums of a few hundred O(1) products: allow a small multiple of machine precision.
   const double interior = ExpectedResponse(true);
@@ -412,7 +433,7 @@ TEST_F(SurfaceResponseDataTest, MatchesClosedFormAcrossPartitions)
   EXPECT_NEAR(surface_responses[0].outgoing + surface_responses[0].incoming,
               interior,
               1.0e-13 * std::abs(interior));
-  EXPECT_NEAR(surface_responses[1].outgoing, boundary, 1.0e-13 * std::abs(boundary));
+  EXPECT_NEAR(surface_responses[1].Total(), boundary, 1.0e-13 * std::abs(boundary));
   // Both interior directions contribute, with opposite signs of mu.
   EXPECT_GT(surface_responses[0].outgoing, 0.0);
   EXPECT_LT(surface_responses[0].incoming, 0.0);
@@ -594,7 +615,7 @@ TEST_F(SurfaceResponseDataTest, MatchesDirectionsRelativeToQuadratureSpacing)
   EXPECT_NEAR(surface_responses[0].outgoing + surface_responses[0].incoming,
               interior,
               1.0e-13 * std::abs(interior));
-  EXPECT_NEAR(surface_responses[1].outgoing, boundary, 1.0e-13 * std::abs(boundary));
+  EXPECT_NEAR(surface_responses[1].Total(), boundary, 1.0e-13 * std::abs(boundary));
 
   // Beyond the tolerance.
   EXPECT_THROW(ComputeSurfaceResponses(forward, Shift(adjoint, 0, 1.2e-4), {}, mpi_comm),
@@ -636,7 +657,7 @@ TEST_F(SurfaceResponseDataTest, MatchesCloselySpacedDirections)
   EXPECT_NEAR(surface_responses[0].outgoing + surface_responses[0].incoming,
               interior,
               1.0e-13 * std::abs(interior));
-  EXPECT_NEAR(surface_responses[1].outgoing, boundary, 1.0e-13 * std::abs(boundary));
+  EXPECT_NEAR(surface_responses[1].Total(), boundary, 1.0e-13 * std::abs(boundary));
 
   // At this spacing, a 1e-15 difference is 1e-3 of the spacing and no longer a match.
   const std::size_t shifted_direction = 2;
@@ -850,8 +871,7 @@ TEST_F(SurfaceResponseDataTest, BoundaryTagsWithSideSuffixesStayBoundaries)
   for (const auto& surface_response : surface_responses)
   {
     EXPECT_EQ(surface_response.kind, SurfaceKind::boundary) << surface_response.name;
-    EXPECT_NEAR(surface_response.outgoing, boundary, 1.0e-13 * std::abs(boundary));
-    EXPECT_EQ(surface_response.incoming, 0.0);
+    EXPECT_NEAR(surface_response.Total(), boundary, 1.0e-13 * std::abs(boundary));
   }
   EXPECT_NO_THROW(ComputeSurfaceResponses(forward, adjoint, {"outer_d"}, mpi_comm));
 

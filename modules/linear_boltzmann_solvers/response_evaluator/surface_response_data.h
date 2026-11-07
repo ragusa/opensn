@@ -117,8 +117,10 @@ struct SurfaceResponse
   /// that side. For a boundary, the normal is the outward normal and these are the outflow
   /// directions.
   double outgoing = 0.0;
-  /// For an interior surface, the contribution of the directions with negative cosine with the
-  /// normal, which leave the cell of the other side and cross back. Zero for a boundary.
+  /// Contribution of the directions with negative cosine with the normal. For an interior surface,
+  /// these leave the cell of the other side and cross back. For a boundary, they are the inflow
+  /// directions: the forward boundary-condition value (a forward boundary source; 0 for a vacuum
+  /// boundary) against the adjoint cell value.
   double incoming = 0.0;
 
   /// The response carried across the surface along its normal: `outgoing + incoming`.
@@ -173,13 +175,14 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
  * with mu_{f,d} the cosine of direction d with the normal n_f of face f. The forward tags of the
  * forward data define the surfaces, classified by the kind the writer records for each tag
  * (SurfaceShard::interior), not by its name:
- * - A boundary: n_f is the outward normal, D_f the outflow directions (mu_{f,d} > 0), and both
- *   fluxes are upwind face values from the boundary tag of each data set: the forward flux of the
- *   face's cell, and the adjoint boundary-condition value (0 for a vacuum boundary), which is
- *   upwind for the adjoint because it travels along -Omega_d. This is the boundary term of the
- *   discrete adjoint identity, so it is exact for the discretization like an interior surface. The
- *   forward inflow directions, which carry a forward boundary source, are not included; their
- *   response is that of EvaluateResponse with boundary sources.
+ * - A boundary: n_f is the outward normal, D_f holds every direction, and both fluxes are upwind
+ *   face values from the boundary tag of each data set. For the outflow directions (mu_{f,d} > 0)
+ *   they are the forward flux of the face's cell and the adjoint boundary-condition value (0 for a
+ *   vacuum boundary), which is upwind for the adjoint because it travels along -Omega_d; for the
+ *   inflow directions, the forward boundary-condition value and the adjoint flux of the cell. This
+ *   is the boundary term of the discrete adjoint identity, so it is exact for the discretization
+ *   like an interior surface, and the totals of all boundaries sum to <q, psi^dagger> -
+ *   <q^dagger, psi> for the volumetric sources q and q^dagger.
  * - An interior surface, with both interior tags `X_u` and `X_d` in the forward data: the faces are
  * those of `X_u`, n_f is the `X_u` normal (the positive axis), and D_f holds every direction. The
  * forward flux comes from the side upwind of the direction (`X_u` for mu_{f,d} > 0, `X_d` for

@@ -10,11 +10,13 @@ For the upwind DFEM discretization, the forward and adjoint solutions satisfy
     <q, psi^dagger> - <q^dagger, psi> = sum over boundary faces of
         sum_d w_d mu_d M (psi_up psi^dagger_up),
 
-where on a boundary face psi_up is the forward cell value for outflow directions (mu_d > 0) and
+where on a boundary face, for outflow directions (mu_d > 0), psi_up is the forward cell value and
 psi^dagger_up the adjoint boundary-condition value, upwind for the adjoint because it travels along
--Omega_d. Interior faces cancel in pairs, and the terms of a reflecting boundary cancel when both
-problems reflect. The forward problem has a volumetric source q near the origin, vacuum boundaries,
-and a reflecting ymin boundary. This test checks, against <q, phi^dagger> from EvaluateResponse:
+-Omega_d, and for inflow directions psi_up is the forward boundary-condition value and
+psi^dagger_up the adjoint cell value. Interior faces cancel in pairs, and the terms of a reflecting
+boundary cancel when both problems reflect. The forward problem of A and B has a volumetric source q
+near the origin, vacuum boundaries, and a reflecting ymin boundary. A and B are checked against
+<q, phi^dagger> from EvaluateResponse:
 
 A. Adjoint driven by a volumetric detector source with vacuum boundaries (ymin reflecting): the
    interior plane x = x_p, which separates source and detector, carries the response, and the
@@ -23,6 +25,11 @@ B. Adjoint driven only by a direction- and group-dependent incoming flux on xmax
    the domain: the xmax boundary response and the interior plane response both equal the response.
    The boundary values are those of the adjoint sweep, so this checks the mapping of adjoint sweep
    directions to physical directions.
+
+C. Forward problem driven only by an isotropic incoming flux on xmin, with the adjoint of A: the
+   xmin incoming part (forward boundary value against the adjoint cell value) equals minus the
+   detector response computed from the forward scalar flux, the reflecting ymin terms cancel, and
+   the plane carries the response.
 
 It also checks that the upwind values of the reflecting boundary are the reflected angular fluxes.
 """
@@ -39,6 +46,7 @@ if "opensn_console" not in globals():
     global_max = MPI.COMM_WORLD.allreduce
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../")))
     from pyopensn.aquad import GLCProductQuadrature2DXY, GLCProductQuadrature3DXYZ
+    from pyopensn.fieldfunc import FieldFunctionInterpolationVolume
     from pyopensn.logvol import RPPLogicalVolume
     from pyopensn.math import AngularFluxFunction
     from pyopensn.mesh import OrthogonalMeshGenerator
@@ -116,10 +124,14 @@ if __name__ == "__main__":
         boundaries = ["xmin", "xmax", "ymin", "ymax"]
     vacuum_boundaries = [b for b in boundaries if b != "ymin"]
 
-    def make_problem(adjoint, xmax_condition):
+    def make_problem(adjoint, xmax_condition, xmin_condition=None):
         conditions = [{"name": "ymin", "type": "reflecting"}, xmax_condition]
+        if xmin_condition is not None:
+            conditions.append(xmin_condition)
         conditions += [
-            {"name": b, "type": "vacuum"} for b in vacuum_boundaries if b != "xmax"
+            {"name": b, "type": "vacuum"}
+            for b in vacuum_boundaries
+            if b != "xmax" and not (xmin_condition is not None and b == "xmin")
         ]
         return DiscreteOrdinatesProblem(
             mesh=grid,
@@ -190,6 +202,25 @@ if __name__ == "__main__":
         prefix + "B_", boundary_surfaces=boundaries, interior_surfaces=interior
     )
 
+    # C. Forward problem driven only by an isotropic incoming flux on xmin; its detector response,
+    # sum over groups of 0.8 times the integral of the scalar flux over the detector, is computed
+    # from the forward flux independently of the surface data.
+    forward_c = make_problem(
+        False, vacuum, {"name": "xmin", "type": "isotropic", "group_strength": [1.0] * num_groups}
+    )
+    solve(forward_c)
+    qoi_c = 0.0
+    for field_function in forward_c.GetScalarFluxFieldFunction():
+        interpolator = FieldFunctionInterpolationVolume()
+        interpolator.SetOperationType("sum")
+        interpolator.SetLogicalVolume(detector_volume)
+        interpolator.AddFieldFunction(field_function)
+        interpolator.Execute()
+        qoi_c += 0.8 * interpolator.GetValue()
+    forward_c.WriteSurfaceAngularFluxes(
+        prefix + "C_", boundary_surfaces=boundaries, interior_surfaces=interior
+    )
+
     surfaces = boundaries + ["plane"]
 
     def data(name, flux_prefix, surface_prefix):
@@ -204,6 +235,7 @@ if __name__ == "__main__":
             data("F", None, prefix + "F_"),
             data("A", prefix + "A_phi_", prefix + "A_"),
             data("B", prefix + "B_phi_", prefix + "B_"),
+            data("C", None, prefix + "C_"),
         ],
         sources={"material": [{"block_id": 1, "strength": source_strength}]},
     )
@@ -215,6 +247,16 @@ if __name__ == "__main__":
     )
     plane_b = evaluator.EvaluateSurfaceResponse("F", "B", ["plane"])["plane"]["total"]
     xmax_b = evaluator.EvaluateSurfaceResponse("F", "B", ["xmax"])["xmax"]["total"]
+
+    # With no volumetric forward source, the boundary totals sum to minus the detector response:
+    # the xmin incoming part carries it (forward boundary value against the adjoint cell value),
+    # the vacuum boundaries carry nothing, and the reflecting ymin terms cancel. The plane, which
+    # separates xmin from the detector, carries the response.
+    responses_c = evaluator.EvaluateSurfaceResponse("C", "A", boundaries + ["plane"])
+    xmin_incoming_c = responses_c["xmin"]["incoming"]
+    boundary_total_c = sum(responses_c[b]["total"] for b in boundaries)
+    ymin_total_c = responses_c["ymin"]["total"]
+    plane_c = responses_c["plane"]["total"]
 
     # A surface list without surface files is rejected.
     stray_surfaces_rejected = 0
@@ -270,6 +312,11 @@ if __name__ == "__main__":
         print(f"A vacuum boundary fraction={abs(vacuum_a / qoi_a):.3e}")
         print(f"B plane identity error={abs(plane_b / qoi_b - 1.0):.3e}")
         print(f"B boundary identity error={abs(xmax_b / qoi_b - 1.0):.3e}")
+        print(f"C response={qoi_c:.8e}")
+        print(f"C xmin incoming identity error={abs(xmin_incoming_c / qoi_c + 1.0):.3e}")
+        print(f"C boundary total identity error={abs(boundary_total_c / qoi_c + 1.0):.3e}")
+        print(f"C reflecting total fraction={abs(ymin_total_c / qoi_c):.3e}")
+        print(f"C plane identity error={abs(plane_c / qoi_c - 1.0):.3e}")
         print(f"Reflected upwind mismatch={reflection_mismatch:.3e}")
         print(f"Stray surfaces rejected={stray_surfaces_rejected}")
 
