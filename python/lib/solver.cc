@@ -676,6 +676,8 @@ WrapLBS(py::module& slv)
         entry["num_partitions"] = surface_flux.num_partitions;
         entry["num_directions"] = surface_flux.num_directions;
         entry["num_groups"] = surface_flux.num_groups;
+        entry["first_group"] = surface_flux.first_group;
+        entry["file_set_id"] = surface_flux.file_set_id;
         entry["interior"] = surface_flux.interior;
         entry["surface_name"] = surface_flux.surface_name;
         entry["mapping"] = std::move(mapping);
@@ -706,12 +708,14 @@ WrapLBS(py::module& slv)
     List[dict]
         Surface mapping and angular-flux data for each groupset and read tag, ordered by groupset
         and then by tag; 'surface_name' is the tag. Each entry has keys 'groupset_id', 'adjoint',
-        'num_partitions', 'num_directions', 'num_groups', 'surface_name', 'interior', 'mapping',
-        and 'data'. 'adjoint' is True when the file was written from an adjoint problem.
+        'num_partitions', 'file_set_id', 'num_directions', 'num_groups', 'first_group',
+        'surface_name', 'interior', 'mapping', and 'data'. 'adjoint' is True when the file was
+        written from an adjoint problem. 'file_set_id' is shared by the files written by one
+        WriteSurfaceAngularFluxes call.
         'interior' is True when the tag is one side of an interior surface and False for a
         boundary. 'num_partitions' is
         the number of files in the set, one per writing rank. 'num_directions' and 'num_groups' are
-        the counts of the entry's groupset. In 'data', 'psi'
+        the counts of the entry's groupset, and 'first_group' its first group. In 'data', 'psi'
         holds the angular flux of the face's cell; for a boundary tag, 'upwind_psi' (empty for an
         interior tag) holds the face value upwind of each direction along the direction the data
         transport in (Omega for forward data, -Omega for adjoint data): 'psi' for a direction
@@ -739,8 +743,8 @@ WrapLBS(py::module& slv)
     RuntimeError
         If the file is missing, malformed, contains non-finite values, was written by an
         unsupported version of OpenSn, or records a set of at most ``partition`` files.
-        Files of an older, larger set written to the same prefix are not detected by a single
-        read; compare their ``num_partitions`` with that of partition 0.
+        Files of another set written to the same prefix are not detected by a single read;
+        compare their ``file_set_id`` with that of partition 0.
     )",
     py::arg("file_base"),
     py::arg("surfaces"),

@@ -91,11 +91,13 @@ PartitionFileName(const std::string& file_base, const std::uint64_t id)
 struct FileSetHeader
 {
   std::uint64_t num_partitions = 0;
+  std::uint64_t file_set_id = 0;
   bool adjoint = false;
   std::array<double, 3> centroid_origin = {0.0, 0.0, 0.0};
   double centroid_spacing = 0.0;
   std::vector<std::uint64_t> num_dirs;
   std::vector<std::uint64_t> num_groups;
+  std::vector<std::uint64_t> first_groups;
   /// Per surface, 1 if the tag is one side of an interior surface and 0 for a boundary.
   std::vector<std::uint64_t> interior;
 };
@@ -110,6 +112,7 @@ GetFileHeader(const std::vector<SurfaceAngularFlux>& file_fluxes, const size_t n
   FileSetHeader header;
   const auto& first = file_fluxes.front();
   header.num_partitions = first.num_partitions;
+  header.file_set_id = first.file_set_id;
   header.adjoint = first.adjoint;
   header.centroid_origin = first.mapping.centroid_origin;
   header.centroid_spacing = first.mapping.centroid_spacing;
@@ -117,6 +120,7 @@ GetFileHeader(const std::vector<SurfaceAngularFlux>& file_fluxes, const size_t n
   {
     header.num_dirs.push_back(file_fluxes[i].num_directions);
     header.num_groups.push_back(file_fluxes[i].num_groups);
+    header.first_groups.push_back(file_fluxes[i].first_group);
   }
   for (size_t s = 0; s < num_surfaces; ++s)
     header.interior.push_back(file_fluxes[s].interior ? 1U : 0U);
@@ -130,13 +134,16 @@ DescribeHeaderMismatch(const FileSetHeader& reference, const FileSetHeader& head
   if (header.num_partitions != reference.num_partitions)
     return "it records " + std::to_string(header.num_partitions) +
            " partitions, but partition 0 records " + std::to_string(reference.num_partitions);
+  if (header.file_set_id != reference.file_set_id)
+    return "it was written by another WriteSurfaceAngularFluxes call than partition 0";
   if (header.adjoint != reference.adjoint)
     return "its adjoint flag differs from partition 0";
   if (header.centroid_origin != reference.centroid_origin or
       header.centroid_spacing != reference.centroid_spacing)
     return "its centroid origin or spacing differs from partition 0";
-  if (header.num_dirs != reference.num_dirs or header.num_groups != reference.num_groups)
-    return "its groupset, direction, or group counts differ from partition 0";
+  if (header.num_dirs != reference.num_dirs or header.num_groups != reference.num_groups or
+      header.first_groups != reference.first_groups)
+    return "its groupset, direction, or group counts or group ranges differ from partition 0";
   if (header.interior != reference.interior)
     return "its surface kinds (boundary or interior side) differ from partition 0";
   return {};
@@ -150,9 +157,10 @@ BroadcastFileSetHeader(const mpi::Communicator& comm, FileSetHeader& header)
   std::vector<double> reals;
   if (comm.rank() == 0)
   {
-    ints = {header.num_partitions, header.adjoint ? 1U : 0U};
+    ints = {header.num_partitions, header.file_set_id, header.adjoint ? 1U : 0U};
     ints.insert(ints.end(), header.num_dirs.begin(), header.num_dirs.end());
     ints.insert(ints.end(), header.num_groups.begin(), header.num_groups.end());
+    ints.insert(ints.end(), header.first_groups.begin(), header.first_groups.end());
     reals = {header.centroid_origin[0],
              header.centroid_origin[1],
              header.centroid_origin[2],
@@ -163,10 +171,13 @@ BroadcastFileSetHeader(const mpi::Communicator& comm, FileSetHeader& header)
   BroadcastVector(comm, header.interior, 0);
 
   header.num_partitions = ints[0];
-  header.adjoint = ints[1] != 0;
-  const auto num_groupsets = static_cast<std::ptrdiff_t>((ints.size() - 2) / 2);
-  header.num_dirs.assign(ints.begin() + 2, ints.begin() + 2 + num_groupsets);
-  header.num_groups.assign(ints.begin() + 2 + num_groupsets, ints.end());
+  header.file_set_id = ints[1];
+  header.adjoint = ints[2] != 0;
+  const auto num_groupsets = static_cast<std::ptrdiff_t>((ints.size() - 3) / 3);
+  const auto begin = ints.begin() + 3;
+  header.num_dirs.assign(begin, begin + num_groupsets);
+  header.num_groups.assign(begin + num_groupsets, begin + 2 * num_groupsets);
+  header.first_groups.assign(begin + 2 * num_groupsets, ints.end());
   header.centroid_origin = {reals[0], reals[1], reals[2]};
   header.centroid_spacing = reals[3];
 }
@@ -188,6 +199,7 @@ ExtractQuadrature(const std::vector<SurfaceAngularFlux>& file_fluxes,
     auto& quadrature = quadratures[gs];
     quadrature.num_dirs = file_fluxes[gs * num_surfaces + surface_index].num_directions;
     quadrature.num_groups = file_fluxes[gs * num_surfaces + surface_index].num_groups;
+    quadrature.first_group = file_fluxes[gs * num_surfaces + surface_index].first_group;
     const auto num_dirs = static_cast<std::ptrdiff_t>(quadrature.num_dirs);
     quadrature.omegas.assign(data.omega.begin(), data.omega.begin() + 3 * num_dirs);
     quadrature.weights.assign(data.wt_d.begin(), data.wt_d.begin() + num_dirs);
@@ -224,7 +236,8 @@ SameQuadrature(const std::vector<SurfaceQuadrature>& a, const std::vector<Surfac
     return false;
   for (size_t gs = 0; gs < a.size(); ++gs)
     if (a[gs].num_dirs != b[gs].num_dirs or a[gs].num_groups != b[gs].num_groups or
-        not Close(a[gs].omegas, b[gs].omegas) or not Close(a[gs].weights, b[gs].weights))
+        a[gs].first_group != b[gs].first_group or not Close(a[gs].omegas, b[gs].omegas) or
+        not Close(a[gs].weights, b[gs].weights))
       return false;
   return true;
 }
@@ -618,6 +631,7 @@ DistributeSurfaceAngularFluxes(const std::string& file_base,
   {
     data.groupsets[gs].num_dirs = header.num_dirs[gs];
     data.groupsets[gs].num_groups = header.num_groups[gs];
+    data.groupsets[gs].first_group = header.first_groups[gs];
   }
   for (size_t s = 0; s < num_surfaces; ++s)
   {
@@ -887,9 +901,10 @@ BuildSameDirectionMap(const SurfaceQuadrature& from,
                       const SurfaceQuadrature& to,
                       const std::string& context)
 {
-  OpenSnInvalidArgumentIf(from.num_dirs != to.num_dirs or from.num_groups != to.num_groups,
-                          "The forward and adjoint data have different direction or group counts "
-                          "in " +
+  OpenSnInvalidArgumentIf(from.num_dirs != to.num_dirs or from.num_groups != to.num_groups or
+                            from.first_group != to.first_group,
+                          "The forward and adjoint data have different direction counts or group "
+                          "ranges in " +
                             context + ".");
   for (const auto* omegas : {&from.omegas, &to.omegas})
     OpenSnInvalidArgumentIf(

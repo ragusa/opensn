@@ -17,6 +17,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <random>
 #include <set>
 #include <tuple>
 
@@ -664,6 +665,15 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
                                           "boundary name on another rank.")
                             : tag_collision_message);
 
+  // A random identifier shared by every file of this set. Collective.
+  uint64_t file_set_id = 0;
+  if (opensn::mpi_comm.rank() == 0)
+  {
+    std::random_device device;
+    file_set_id = (static_cast<uint64_t>(device()) << 32) ^ static_cast<uint64_t>(device());
+  }
+  opensn::mpi_comm.broadcast(file_set_id, 0);
+
   // Open the HDF5 file
   const std::string file_name = file_base + std::to_string(opensn::mpi_comm.rank()) + ".h5";
   const H5FileHandle file(H5Fcreate(file_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT));
@@ -684,6 +694,10 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
 
   OpenSnLogicalErrorIf(not H5CreateAttribute(file.Id(), "num_groupsets", num_groupsets),
                        "Failed to write the number of groupsets to " + file_name + ".");
+  // Identifies the files written by this call, so that readers reject a file left over from
+  // another set written to the same prefix.
+  OpenSnLogicalErrorIf(not H5CreateAttribute(file.Id(), "file_set_id", file_set_id),
+                       "Failed to write the file-set identifier to " + file_name + ".");
   OpenSnLogicalErrorIf(not H5CreateAttribute<bool>(file.Id(), "adjoint", do_problem.IsAdjoint()),
                        "Failed to write the adjoint flag to " + file_name + ".");
   // Readers that redistribute the surface data use this to discover all files of the set.
@@ -958,6 +972,10 @@ DiscreteOrdinatesProblemIO::WriteSurfaceAngularFluxes(
     OpenSnLogicalErrorIf(
       not H5CreateAttribute(file.Id(), group_name + "/num_groups", num_gs_groups),
       "Failed to write the group count for " + group_name + ".");
+    OpenSnLogicalErrorIf(not H5CreateAttribute(file.Id(),
+                                               group_name + "/first_group",
+                                               static_cast<uint64_t>(groupset.first_group)),
+                         "Failed to write the first group for " + group_name + ".");
 
     for (const auto& surf_id : surface_tags)
     {
@@ -1025,6 +1043,10 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
                        file_name + " records a set of " + std::to_string(num_partitions) +
                          " files, so it cannot be partition " + std::to_string(partition) +
                          " of that set.");
+  uint64_t file_set_id = 0;
+  OpenSnLogicalErrorIf(not H5ReadAttribute(file.Id(), "file_set_id", file_set_id),
+                       "Failed to read the file-set identifier from " + file_name +
+                         ". The file was written by an unsupported version of OpenSn.");
   bool file_adjoint = false;
   OpenSnLogicalErrorIf(not H5ReadAttribute(file.Id(), "adjoint", file_adjoint),
                        "Failed to read the adjoint flag from " + file_name +
@@ -1044,6 +1066,7 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
   // than in an allocation.
   std::vector<uint64_t> num_gs_dirs;
   std::vector<uint64_t> num_gs_groups;
+  std::vector<uint64_t> gs_first_groups;
   for (uint64_t gs = 0; gs < num_groupsets; ++gs)
   {
     const std::string group_name = "groupset_" + std::to_string(gs);
@@ -1056,8 +1079,12 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
     OpenSnLogicalErrorIf(not H5ReadAttribute(file.Id(), group_name + "/num_groups", num_groups) or
                            num_groups == 0,
                          "Failed to read a positive group count for " + group_context + ".");
+    uint64_t first_group = 0;
+    OpenSnLogicalErrorIf(not H5ReadAttribute(file.Id(), group_name + "/first_group", first_group),
+                         "Failed to read the first group for " + group_context + ".");
     num_gs_dirs.push_back(num_dirs);
     num_gs_groups.push_back(num_groups);
+    gs_first_groups.push_back(first_group);
   }
 
   // Whether each stored tag is one side of an interior surface or a boundary.
@@ -1258,6 +1285,8 @@ DiscreteOrdinatesProblemIO::ReadSurfaceAngularFluxes(const std::string& file_bas
       surf_flux.num_partitions = num_partitions;
       surf_flux.num_directions = num_dirs;
       surf_flux.num_groups = num_groups;
+      surf_flux.first_group = gs_first_groups[gs];
+      surf_flux.file_set_id = file_set_id;
       surf_flux.surface_name = surface;
       surf_flux.interior = interior_of.at(surface);
       surf_flux.mapping = std::move(gs_map);

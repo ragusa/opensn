@@ -173,9 +173,13 @@ public:
     bool adjoint = false;
     /// Number of files in the file set, one per writing rank.
     uint64_t num_partitions = 0;
+    /// Random identifier shared by the files written by one WriteSurfaceAngularFluxes call.
+    uint64_t file_set_id = 0;
     /// Direction and group counts of the groupset, also set when the surface has no local faces.
     uint64_t num_directions = 0;
     uint64_t num_groups = 0;
+    /// First group of the groupset.
+    uint64_t first_group = 0;
     std::string surface_name;
     /// True when the tag is one side, `<name>_u` or `<name>_d`, of an interior surface; false for a
     /// boundary, whatever its name.
@@ -202,10 +206,11 @@ public:
    * Collective over all ranks. Surface selections may differ by rank, but each file contains only
    * its rank's tags, and DistributeSurfaceAngularFluxes requires every requested tag in every file
    * of a set. Plane-matching tolerances are relative to the global mesh extent. Each rank writes
-   * `<file_base><rank>.h5`, which records whether the problem is in adjoint mode and the number of
-   * files written (`num_partitions`). Boundary tags also store the upwind face values
-   * (`upwind_flux`; see SurfaceData), taken from the problem's boundary conditions for the
-   * directions that enter the domain.
+   * `<file_base><rank>.h5`, which records whether the problem is in adjoint mode, the number of
+   * files written (`num_partitions`), and an identifier shared by the files of the set
+   * (`file_set_id`). Each groupset records its first group. Boundary tags also store the upwind
+   * face values (`upwind_flux`; see SurfaceData), taken from the problem's boundary conditions for
+   * the directions that enter the domain.
    *
    * Requires `options.save_angular_flux=true`. An adjoint problem must hold its solution in the
    * physical orientation (`IsAdjointSolutionReoriented()`), which an adjoint steady-state or

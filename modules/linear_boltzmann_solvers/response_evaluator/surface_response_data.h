@@ -24,6 +24,8 @@ struct SurfaceQuadrature
 {
   std::uint64_t num_dirs = 0;
   std::uint64_t num_groups = 0;
+  /// First group of the groupset.
+  std::uint64_t first_group = 0;
   /// Direction vectors, three Cartesian components per direction.
   std::vector<double> omegas;
   /// Quadrature weights, one per direction.

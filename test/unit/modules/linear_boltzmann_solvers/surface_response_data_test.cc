@@ -120,7 +120,14 @@ struct SetSpec
   bool write_num_partitions = true;
   bool write_adjoint = true;
   bool write_interior = true;
+  bool write_file_set_id = true;
+  bool write_first_group = true;
   bool write_upwind = true;
+  /// Identifier of the set, and an optional (file, identifier) pair for a file of another set.
+  std::uint64_t file_set_id = 7;
+  std::optional<std::pair<size_t, std::uint64_t>> stray_file;
+  /// Added to the first group of every groupset.
+  std::uint64_t first_group_shift = 0;
   double centroid_spacing = 1.0e-9;
   /// Store each face's nodes in reverse order.
   bool reverse_nodes = false;
@@ -151,6 +158,13 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
     if (spec.write_adjoint)
     {
       ASSERT_TRUE(H5CreateAttribute<bool>(id, "adjoint", spec.adjoint));
+    }
+    if (spec.write_file_set_id)
+    {
+      const auto set_id = spec.stray_file.has_value() and spec.stray_file->first == file_id
+                            ? spec.stray_file->second
+                            : spec.file_set_id;
+      ASSERT_TRUE(H5CreateAttribute(id, "file_set_id", set_id));
     }
     if (spec.write_num_partitions)
     {
@@ -202,6 +216,13 @@ WriteSet(const std::string& file_base, const SetSpec& spec)
       ASSERT_TRUE(
         H5CreateAttribute(id, group + "/num_directions", std::uint64_t{directions.size()}));
       ASSERT_TRUE(H5CreateAttribute(id, group + "/num_groups", groups_per_groupset[gs]));
+      if (spec.write_first_group)
+      {
+        std::uint64_t first_group = spec.first_group_shift;
+        for (size_t prior = 0; prior < gs; ++prior)
+          first_group += groups_per_groupset[prior];
+        ASSERT_TRUE(H5CreateAttribute(id, group + "/first_group", first_group));
+      }
       for (const auto& tag : spec.tags)
       {
         const bool boundary = not tag.recorded_interior.value_or(tag.side != 'b');
@@ -416,6 +437,18 @@ TEST_F(SurfaceResponseDataTest, RejectsFilesFromEarlierVersions)
   EXPECT_THROW(DistributeSurfaceAngularFluxes(Write("no_kinds", without_kinds), all_tags, mpi_comm),
                std::logic_error);
 
+  auto without_set_id = ForwardSpec();
+  without_set_id.write_file_set_id = false;
+  EXPECT_THROW(
+    DistributeSurfaceAngularFluxes(Write("no_set_id", without_set_id), all_tags, mpi_comm),
+    std::logic_error);
+
+  auto without_first_group = ForwardSpec();
+  without_first_group.write_first_group = false;
+  EXPECT_THROW(DistributeSurfaceAngularFluxes(
+                 Write("no_first_group", without_first_group), all_tags, mpi_comm),
+               std::logic_error);
+
   auto without_upwind = AdjointSpec();
   without_upwind.write_upwind = false;
   EXPECT_THROW(
@@ -424,6 +457,27 @@ TEST_F(SurfaceResponseDataTest, RejectsFilesFromEarlierVersions)
   // Interior tags have no upwind values.
   EXPECT_NO_THROW(DistributeSurfaceAngularFluxes(
     Write("no_upwind_interior", without_upwind), {"plane"}, mpi_comm));
+}
+
+TEST_F(SurfaceResponseDataTest, RejectsFileOfAnotherSet)
+{
+  // File 2 of the five was left over from another set written to the same prefix.
+  auto spec = ForwardSpec();
+  spec.stray_file = std::make_pair(size_t{2}, std::uint64_t{8});
+  EXPECT_THROW(DistributeSurfaceAngularFluxes(Write("stray", spec), all_tags, mpi_comm),
+               std::logic_error);
+}
+
+TEST_F(SurfaceResponseDataTest, RejectsDifferentGroupRanges)
+{
+  // Same group counts per groupset, but the adjoint groupsets start one group later.
+  auto spec = AdjointSpec();
+  spec.first_group_shift = 1;
+  const auto forward =
+    DistributeSurfaceAngularFluxes(Write("forward", ForwardSpec()), all_tags, mpi_comm);
+  const auto adjoint = DistributeSurfaceAngularFluxes(Write("adjoint", spec), all_tags, mpi_comm);
+  EXPECT_THROW(ComputeSurfaceResponses(forward, adjoint, {"right"}, mpi_comm),
+               std::invalid_argument);
 }
 
 TEST_F(SurfaceResponseDataTest, RejectsMissingFace)
