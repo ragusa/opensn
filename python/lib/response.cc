@@ -194,6 +194,8 @@ WrapResEval(py::module& response)
     Forward and adjoint directions are paired by equal direction vectors, and the nodes of matched
     faces by location. Per-surface outgoing (:math:`\mu_{f,d} > 0`) and incoming
     (:math:`\mu_{f,d} < 0`) contributions are logged at verbosity 1. This call is collective.
+    The adjoint data must come from an adjoint problem, which OpenSn supports only in Cartesian
+    geometry, so surface responses are not available for curvilinear (RZ) problems.
 
     Parameters
     ----------

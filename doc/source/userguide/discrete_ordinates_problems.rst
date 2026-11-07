@@ -946,6 +946,11 @@ as ``surface_angular_fluxes`` in the ``data`` option of
 Surface Responses
 -----------------
 
+Surface responses pair forward data with data written by an adjoint problem.
+OpenSn rejects adjoint mode for curvilinear problems, so surface responses are
+available for Cartesian geometries only; surface files written by a forward
+curvilinear problem can still be read with :py:meth:`ReadSurfaceAngularFluxes`.
+
 An interior surface written with ``interior_surfaces={"x20": ("x", 20.0)}`` is
 stored under two tags, one per side: ``x20_u``, the faces of the cells on the
 negative side, whose outward normal is the positive axis, and ``x20_d``, the
