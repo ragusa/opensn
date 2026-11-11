@@ -25,6 +25,13 @@ those points. The flux of a cell depends on the mesh only, not on how it is part
 sum has the same reference value on 1, 2 and 4 ranks, to round-off. tests.json also checks that
 the balance the solver reports, production = removal + outflow, closes to round-off in the
 problems without reflecting planes, whose image sources are not corrected for conservation.
+
+The optional arguments hull_tracer_search ("segment", "cell_shaft" or "source_directions"),
+hull_tracer_backend and hull_tracer_direction_bins select how the tracer searches the hull, and
+turn on the statistics of the tracer. The search does not change which triangles a path crosses,
+so the flux sum and the number of crossings that the solver reports do not depend on it.
+tests.json takes the number of crossings from a run with hull_tracer_backend="brute_force",
+which tests every triangle against every path.
 """
 
 import importlib
@@ -208,6 +215,15 @@ if __name__ == "__main__":
         raise ValueError(f"Unknown mesh_type {mesh_type}")
 
     file_name = f"uncollided_ray_trace_parallel_{mesh_type}.h5"
+    # Options of the material-hull ray tracer given as arguments; any of them turns on the
+    # statistics of the tracer.
+    tracer_options = {
+        name: globals()[name]
+        for name in ("hull_tracer_search", "hull_tracer_backend", "hull_tracer_direction_bins")
+        if name in globals()
+    }
+    if tracer_options:
+        tracer_options["hull_tracer_statistics"] = True
     if rank == 0 and os.path.exists(file_name):
         os.remove(file_name)
     problem = UncollidedProblem(
@@ -221,6 +237,7 @@ if __name__ == "__main__":
         scattering_order=scattering_order,
         method="ray_trace",
         ray_tracer="material_hull",
+        **tracer_options,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()
