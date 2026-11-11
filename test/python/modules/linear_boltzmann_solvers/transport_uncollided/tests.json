@@ -40,6 +40,12 @@
         "key": "UncollidedParallelGenerationRejected=",
         "goldvalue": 1.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedParallelOtherCombinationsRejected=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
       }
     ]
   },
@@ -677,6 +683,384 @@
         "key": "RayTraceMethodRegionRejected=",
         "goldvalue": 1.0,
         "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 1 rank, hexahedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 1,
+    "args": [
+      "mesh_type=\"hexahedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.011072804,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209130094247,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, hexahedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"hexahedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.011072804,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209130094247,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, hexahedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"hexahedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.011072804,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209130094247,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 1 rank, prisms: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 1,
+    "args": [
+      "mesh_type=\"prisms\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_prisms_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0179858083,
+        "abs_tol": 0.006
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.456987476966714,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxP1ScaledError=",
+        "goldvalue": 0.0168461752,
+        "abs_tol": 0.006
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, prisms: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"prisms\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_prisms_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0179858083,
+        "abs_tol": 0.006
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.456987476966714,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxP1ScaledError=",
+        "goldvalue": 0.0168461752,
+        "abs_tol": 0.006
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, prisms: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"prisms\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_prisms_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0179858083,
+        "abs_tol": 0.006
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.456987476966714,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxP1ScaledError=",
+        "goldvalue": 0.0168461752,
+        "abs_tol": 0.006
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 1 rank, tetrahedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 1,
+    "args": [
+      "mesh_type=\"tetrahedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_tetrahedra_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0494604883,
+        "abs_tol": 0.015
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 740.928475789106,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, tetrahedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"tetrahedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_tetrahedra_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0494604883,
+        "abs_tol": 0.015
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 740.928475789106,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, tetrahedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"tetrahedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_tetrahedra_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0494604883,
+        "abs_tol": 0.015
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 740.928475789106,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 1 rank, reflecting: analytic reference, partition-independent flux",
+    "num_procs": 1,
+    "args": [
+      "mesh_type=\"reflecting\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_reflecting_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0120876727,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.589971523733287,
+        "rel_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, reflecting: analytic reference, partition-independent flux",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"reflecting\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_reflecting_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0120876727,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.589971523733287,
+        "rel_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, reflecting: analytic reference, partition-independent flux",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"reflecting\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_reflecting_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0120876727,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.589971523733287,
+        "rel_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, polyhedra: analytic reference, partition-independent flux, balance to round-off",
+    "num_procs": 4,
+    "weight_class": "intermediate",
+    "args": [
+      "mesh_type=\"polyhedra\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_polyhedra_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.00540076773,
+        "abs_tol": 0.002
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 8.09520082109159e-05,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },

@@ -56,9 +56,34 @@ if __name__ == "__main__":
     except ValueError as error:
         rejected = "exactly one MPI rank" in str(error)
 
+    # Several ranks are supported only when every cell is ray traced against the material hull,
+    # which needs no cell of another rank. The two other combinations of these options walk
+    # through cells or sweep them, and are rejected.
+    other_combinations_rejected = True
+    for arguments in (
+        {"method": "ray_trace", "ray_tracer": "cell_walk"},
+        {"method": "sweep", "ray_tracer": "material_hull", "near_source": [whole_domain]},
+    ):
+        try:
+            problem = UncollidedProblem(
+                mesh=grid,
+                num_groups=1,
+                groupsets=[{"groups_from_to": [0, 0]}],
+                xs_map=[{"block_ids": [0], "xs": xs}],
+                point_sources=[PointSource(location=[0.0, 0.0, 1.05], strength=[1.0])],
+                **arguments,
+            )
+            other_combinations_rejected = False
+        except ValueError as error:
+            if "exactly one MPI rank" not in str(error):
+                other_combinations_rejected = False
+
     if rank == 0:
         print(f"UncollidedParallelGenerationRejected={int(rejected)}")
+        print(f"UncollidedParallelOtherCombinationsRejected={int(other_combinations_rejected)}")
         sys.stdout.flush()
 
     if not rejected:
         raise RuntimeError("Uncollided generation did not reject multiple MPI ranks")
+    if not other_combinations_rejected:
+        raise RuntimeError("Uncollided generation accepted an unsupported option on several ranks")
