@@ -631,7 +631,9 @@ the same projection and the same conservation correction.
 The two tracers agree to round-off. This includes paths that pass exactly
 through an edge or a vertex of the mesh, which occur on regular meshes when the
 source sits at simple coordinates: both tracers resolve them with the same
-rule, and the cell walk reports how many it met. On meshes with non-convex
+rule, and the cell walk reports how many it met. A path that lies exactly in
+the plane of a face is traced from a start point displaced by about
+:math:`10^{-10}` of the cell size. On meshes with non-convex
 cells, or with faces of more than eight vertices, the cell walk has no such
 rule. It then continues such a path from a point displaced by about one percent
 of the cell size, which changes the length of the path in each cell by a

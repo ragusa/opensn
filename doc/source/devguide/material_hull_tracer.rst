@@ -231,6 +231,16 @@ for sources at simple coordinates. Their number is logged, and
 ``uncollided_ray_tracer_equivalence.py`` checks that the two tracers agree to
 round-off on them.
 
+One case is left: a path that lies exactly in the plane of a face, as happens
+for a source on a plane of symmetry of the mesh. The edges in that plane are
+seen end-on, their edge functions are round-off instead of exact zeros, and the
+crossings are then not those of one displaced path; the walk can circle around
+an edge. ``WalkSegmentWatertight`` detects this, because the walk does not end
+in a cell that contains the end point, and the piece is walked again from a
+start point moved into its cell by about :math:`10^{-10}` of the distance to
+the cell centroid, the displacement ``ComputeHullOpticalDepth`` uses. These
+paths are counted in the same log line.
+
 Before this, such a path fell back on ``RayTracer::TraceRay``, which displaces
 the point by about one percent of the cell size, and the length of the path in
 each cell was off by a similar amount. That fallback remains for meshes with
