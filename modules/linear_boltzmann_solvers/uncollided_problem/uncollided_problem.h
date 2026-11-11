@@ -121,7 +121,46 @@ protected:
   /// Stores the reflection planes once the configuration has been validated.
   void BuildRuntimeData() override;
 
+  /// Ray-traced data of a near-source cell, before its conservation correction.
+  struct RawNearSourceCell
+  {
+    /// Leakage through each face, indexed [face][group]. Tracing fills the outgoing faces; the
+    /// conservation pass scales them and copies the leakage of the upwind cell to the incoming
+    /// faces.
+    std::vector<std::vector<double>> leakage;
+    /// Flux at the cell nodes, indexed [group](node).
+    std::vector<Vector<double>> phi;
+    /// Upwind face terms of the bulk cells next to this cell, by bulk degree of freedom and then
+    /// by group.
+    std::unordered_map<size_t, std::vector<double>> bulk_rhs;
+    /// For each face towards the bulk region, the share of a uniform face flux that goes to each
+    /// bulk degree of freedom.
+    std::vector<std::vector<std::pair<size_t, double>>> bulk_face_rhs_weights;
+    bool is_source_cell = false;
+    bool is_exact_neighbor = false;
+    /// True when the cell was integrated exactly over direction.
+    bool integrated_exactly = false;
+  };
+
+  /**
+   * Ray traces the near-source region of a source and enforces conservation cell by cell.
+   *
+   * The cells are first traced independently, on OPENSN_NUM_THREADS threads, and then corrected
+   * one after the other in sweep order. The result does not depend on the number of threads.
+   */
   void RaytraceNearSourceRegion(const SourcePoint& source_point);
+
+  /**
+   * Ray traces one near-source cell: the leakage through its outgoing faces, its flux projected
+   * on the finite element basis, and the upwind face terms of its bulk neighbors, all before
+   * the conservation correction. It reads nothing that the tracing or the correction of another
+   * cell writes, so several threads may trace different cells, each with its own ray tracer.
+   */
+  void TraceNearSourceCell(RayTracer& ray_tracer,
+                           const SourcePoint& source_point,
+                           size_t c,
+                           bool is_exact_neighbor,
+                           RawNearSourceCell& raw);
 
   void ProjectReflectedImageSources(unsigned int progress_interval);
 

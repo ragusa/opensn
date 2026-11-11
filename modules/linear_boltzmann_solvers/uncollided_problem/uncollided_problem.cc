@@ -1475,6 +1475,235 @@ UncollidedProblem::ProjectReflectedImageSources(const unsigned int progress_inte
 }
 
 void
+UncollidedProblem::TraceNearSourceCell(RayTracer& ray_tracer,
+                                       const SourcePoint& source_point,
+                                       const size_t c,
+                                       const bool is_exact_neighbor,
+                                       RawNearSourceCell& raw)
+{
+  const auto& sdm = *discretization_;
+  const Vector3& pt_loc = source_point.location;
+  constexpr auto FOOUTGOING = FaceOrientation::OUTGOING;
+
+  const Cell& cell = grid_->GetLocalCell(c);
+
+  // Cell mapping
+  auto coord_sys = grid_->GetCoordinateSystem();
+  auto swf = SpatialWeightFunction::FromCoordinateType(coord_sys);
+  const auto& cell_mapping = sdm.GetCellMapping(cell);
+  const size_t cell_num_faces = cell.faces.size();
+  const size_t cell_num_nodes = cell_mapping.GetNumNodes();
+  const auto fe_vol_data = cell_mapping.MakeVolumetricFiniteElementData();
+
+  // RHS contributions for bulk region cells adjacent to a raytraced cell.
+  auto& cell_bulk_rhs = raw.bulk_rhs;
+  auto& bulk_face_rhs_weights = raw.bulk_face_rhs_weights;
+  cell_bulk_rhs.clear();
+  bulk_face_rhs_weights.assign(cell_num_faces, {});
+
+  // The flux is singular at a point source, so neither the least-squares projection nor the
+  // face quadrature resolves it in the cell that contains the source. That cell instead gets
+  // its exact cell-average flux and exact face leakages. Optionally, so do its vertex
+  // neighbors.
+  std::optional<ExactCellIntegrals> exact_integrals;
+  const bool is_source_cell =
+    std::any_of(source_point.subscribers.begin(),
+                source_point.subscribers.end(),
+                [c](const auto& subscriber) { return subscriber.cell_local_id == c; });
+  if (is_source_cell or is_exact_neighbor)
+    exact_integrals = IntegrateCellExactly(ray_tracer, cell, source_point);
+  raw.is_source_cell = is_source_cell;
+  raw.is_exact_neighbor = is_exact_neighbor;
+  raw.integrated_exactly = exact_integrals.has_value();
+
+  // Compute leakages
+  auto& cell_leakage = raw.leakage;
+  cell_leakage.resize(cell_num_faces);
+  std::vector<double> face_leakage;
+  for (size_t f = 0; f < cell_num_faces; ++f)
+  {
+    const auto orientation = cell_face_orientations_[c][f];
+    face_leakage.assign(num_groups_, 0.);
+
+    // Compute leakage out of outgoing face
+    if (orientation == FOOUTGOING)
+    {
+      // Face data
+      const auto& face = cell.faces[f];
+
+      const Vector3& normal = face.normal;
+      const auto fe_srf_data = cell_mapping.MakeSurfaceFiniteElementData(f);
+      std::vector<std::vector<double>> face_fluxes;
+      std::vector<double> face_omega_n_jxw;
+      face_fluxes.reserve(fe_srf_data.GetQuadraturePointIndices().size());
+      face_omega_n_jxw.reserve(fe_srf_data.GetQuadraturePointIndices().size());
+
+      for (const auto& qp : fe_srf_data.GetQuadraturePointIndices())
+      {
+        const auto& qp_xyz = fe_srf_data.QPointXYZ(qp);
+        const auto omega = ComputeOmega(pt_loc, qp_xyz);
+        const auto phi_qp =
+          RaytraceLine(ray_tracer, cell, qp_xyz, source_point, static_cast<int>(f));
+        const double integrand = (*swf)(qp_xyz)*omega.Dot(normal) * fe_srf_data.JxW(qp);
+
+        for (size_t g = 0; g < num_groups_; ++g)
+          face_leakage[g] += phi_qp[g] * integrand;
+        face_fluxes.push_back(phi_qp);
+        face_omega_n_jxw.push_back(integrand);
+      }
+
+      // Scale the traced face fluxes so that the leakage through the face equals the exact
+      // value. The traced values still set its distribution over face nodes.
+      if (exact_integrals)
+        for (size_t g = 0; g < num_groups_; ++g)
+          if (face_leakage[g] > 0.0)
+          {
+            const double scale = exact_integrals->face_leakage[f][g] / face_leakage[g];
+            for (auto& face_flux : face_fluxes)
+              face_flux[g] *= scale;
+            face_leakage[g] = exact_integrals->face_leakage[f][g];
+          }
+
+      if (face.has_neighbor)
+      {
+        size_t neighbor_id = face.GetNeighborLocalID(grid_.get());
+
+        // Near-source/bulk region interface
+        if (cell_regions_[neighbor_id] == CellRegion::BULK)
+        {
+          // Face data
+          const size_t num_face_nodes = cell_mapping.GetNumFaceNodes(f);
+          const auto fe_srf_data = cell_mapping.MakeSurfaceFiniteElementData(f);
+
+          // Neighbor data
+          const Cell& neighbor = grid_->GetLocalCell(neighbor_id);
+          const auto& neighbor_mapping = sdm.GetCellMapping(neighbor);
+
+          size_t f_ = face.GetNeighborAdjacentFaceIndex(grid_.get());
+          const size_t neighbor_num_face_nodes = neighbor_mapping.GetNumFaceNodes(f_);
+          double face_measure = 0.0;
+          for (const auto& qp : fe_srf_data.GetQuadraturePointIndices())
+            face_measure += (*swf)(fe_srf_data.QPointXYZ(qp)) * fe_srf_data.JxW(qp);
+          OpenSnLogicalErrorIf(face_measure <= 0.0,
+                               "Invalid surface measure on near-source cell " +
+                                 std::to_string(cell.global_id) + " face " + std::to_string(f) +
+                                 ".");
+
+          for (size_t fi = 0; fi < num_face_nodes; ++fi)
+          {
+            const int i = cell_mapping.MapFaceNode(f, fi);
+
+            int j = -1;
+            for (size_t fj = 0; fj < neighbor_num_face_nodes; ++fj)
+            {
+              const int neighbor_node = neighbor_mapping.MapFaceNode(f_, fj);
+              if (neighbor.vertex_ids[neighbor_node] == cell.vertex_ids[i])
+              {
+                j = neighbor_node;
+                break;
+              }
+            }
+            OpenSnLogicalErrorIf(j < 0,
+                                 "Failed to map outgoing uncollided sweep face node from cell " +
+                                   std::to_string(cell.global_id) + " face " + std::to_string(f) +
+                                   " to neighbor cell " + std::to_string(neighbor.global_id) +
+                                   " face " + std::to_string(f_) + ".");
+
+            // Compute rhs for bulk region sweep
+            const auto jr = sdm.MapDOFLocal(neighbor, j);
+            double fallback_rhs_weight = 0.0;
+            size_t qp_index = 0;
+            for (const auto& qp : fe_srf_data.GetQuadraturePointIndices())
+            {
+              // Compute the upwind face contribution to the neighboring bulk
+              // cell's RHS.  The bulk sweep later computes the cell RHS from
+              // destination_phi_, and storing by the neighbor's local DOF keeps
+              // this interface term independent of the current cell's local
+              // face-node ordering.
+              const double integrand = face_omega_n_jxw[qp_index] * fe_srf_data.ShapeValue(i, qp);
+
+              auto& rhs_g = cell_bulk_rhs[jr];
+              if (rhs_g.empty())
+                rhs_g.assign(num_groups_, 0.0);
+
+              for (size_t g = 0; g < num_groups_; ++g)
+                rhs_g[g] += face_fluxes[qp_index][g] * integrand;
+              fallback_rhs_weight += (*swf)(fe_srf_data.QPointXYZ(qp)) *
+                                     fe_srf_data.ShapeValue(i, qp) * fe_srf_data.JxW(qp);
+              ++qp_index;
+            } // for qp
+            bulk_face_rhs_weights[f].emplace_back(jr, fallback_rhs_weight / face_measure);
+          } // for fi
+        } // if neighbor_id in bulk_spls_
+      } // if face.has_neighbor
+    } // if outgoing
+
+    // Save leakage through face
+    cell_leakage[f] = face_leakage;
+  }
+
+  // Ray-traced solution in cell
+  auto& phi = raw.phi;
+  phi.assign(num_groups_, Vector<double>(cell_num_nodes, 0.));
+
+  if (exact_integrals and is_source_cell)
+  {
+    // Represent the source cell by its exact cell-average flux.
+    const auto& intV_shapeI = unit_cell_matrices_[c].intV_shapeI;
+    const double cell_volume = std::accumulate(intV_shapeI.begin(), intV_shapeI.end(), 0.0);
+    for (size_t g = 0; g < num_groups_; ++g)
+      phi[g].Set(exact_integrals->volume_integral[g] / cell_volume);
+  }
+  else
+  {
+    // Mass matrix times least-squares flux vector
+    for (const auto& qp : fe_vol_data.GetQuadraturePointIndices())
+    {
+      // Raytrace to point
+      Vector3 qp_xyz = fe_vol_data.QPointXYZ(qp);
+
+      std::vector<double> phi_qp = RaytraceLine(ray_tracer, cell, qp_xyz, source_point);
+
+      for (unsigned int i = 0; i < cell_num_nodes; ++i)
+      {
+        // Integrand value at quadrature point
+        double integrand =
+          (*swf)(fe_vol_data.QPointXYZ(qp)) * fe_vol_data.ShapeValue(i, qp) * fe_vol_data.JxW(qp);
+
+        // Compute group-wise least-squares fluxes
+        for (size_t g = 0; g < num_groups_; ++g)
+          phi[g](i) += phi_qp[g] * integrand;
+      }
+    }
+
+    // Invert mass matrix
+    for (size_t g = 0; g < num_groups_; ++g)
+    {
+      auto mass_matrix = unit_cell_matrices_[c].intV_shapeI_shapeJ;
+      GaussElimination(mass_matrix, phi[g], static_cast<int>(cell_num_nodes));
+    }
+
+    // Keep the projected shape but match the exact volume integral, or use the exact average
+    // when the projection has no positive integral to scale.
+    if (exact_integrals)
+    {
+      const auto& intV_shapeI = unit_cell_matrices_[c].intV_shapeI;
+      const double cell_volume = std::accumulate(intV_shapeI.begin(), intV_shapeI.end(), 0.0);
+      for (size_t g = 0; g < num_groups_; ++g)
+      {
+        double projected_integral = 0.0;
+        for (size_t i = 0; i < cell_num_nodes; ++i)
+          projected_integral += intV_shapeI(i) * phi[g](i);
+        if (projected_integral > 0.0)
+          phi[g].Scale(exact_integrals->volume_integral[g] / projected_integral);
+        else
+          phi[g].Set(exact_integrals->volume_integral[g] / cell_volume);
+      }
+    }
+  }
+}
+
+void
 UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
 {
   CALI_CXX_MARK_SCOPE("RaytraceNearSourceRegion");
@@ -1486,15 +1715,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   const Vector3& pt_loc = source_point.location;
   const std::vector<double>& strength = source_point.strength;
 
-  RayTracer ray_tracer(grid_, &cell_sizes_, not all_cells_convex_);
-
-  // Face leakages
-  std::unordered_map<size_t, std::vector<std::vector<double>>> leakages;
-  std::vector<std::vector<double>> cell_leakage;
-  std::vector<double> face_leakage;
-
   // Face orientations
-  constexpr auto FOPARALLEL = FaceOrientation::PARALLEL;
   constexpr auto FOINCOMING = FaceOrientation::INCOMING;
   constexpr auto FOOUTGOING = FaceOrientation::OUTGOING;
 
@@ -1537,241 +1758,96 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
     }
   }
 
-  // Ray-trace near-source region cells
-  for (size_t c : near_spls_)
+  // Trace every near-source cell. The ray-traced data of a cell does not depend on the other
+  // cells, so the cells are shared among the threads; each thread writes to the cells it takes.
+  const size_t num_near_cells = near_spls_.size();
+  std::vector<RawNearSourceCell> raw_cells(num_near_cells);
   {
+    const size_t num_threads =
+      std::min<size_t>(std::max(1U, opensn_num_threads), std::max<size_t>(1, num_near_cells));
+    if (num_threads > 1)
+      log.Log() << "Tracing " << num_near_cells << " near-source cells with " << num_threads
+                << " threads.";
+    std::atomic<size_t> next_cell = 0;
+    std::exception_ptr worker_exception;
+    std::mutex exception_mutex;
+    auto TraceCells = [&]()
+    {
+      try
+      {
+        RayTracer ray_tracer(grid_, &cell_sizes_, not all_cells_convex_);
+        for (size_t n = next_cell.fetch_add(1); n < num_near_cells; n = next_cell.fetch_add(1))
+          TraceNearSourceCell(ray_tracer,
+                              source_point,
+                              near_spls_[n],
+                              is_exact_neighbor[near_spls_[n]],
+                              raw_cells[n]);
+      }
+      catch (...)
+      {
+        // Let the other threads stop at their next cell.
+        next_cell.store(num_near_cells);
+        std::scoped_lock lock(exception_mutex);
+        if (not worker_exception)
+          worker_exception = std::current_exception();
+      }
+    };
+    std::vector<std::thread> workers;
+    workers.reserve(num_threads - 1);
+    for (size_t thread_id = 1; thread_id < num_threads; ++thread_id)
+      workers.emplace_back(TraceCells);
+    TraceCells();
+    for (auto& worker : workers)
+      worker.join();
+    if (worker_exception)
+      std::rethrow_exception(worker_exception);
+  }
+
+  // Position of each near-source cell in the sweep order.
+  constexpr size_t not_near_source = std::numeric_limits<size_t>::max();
+  std::vector<size_t> near_index(grid_->GetLocalCellCount(), not_near_source);
+  for (size_t n = 0; n < num_near_cells; ++n)
+    near_index[near_spls_[n]] = n;
+
+  // Enforce conservation cell by cell, from the source outward: the corrected leakage out of a
+  // cell is the leakage into the cells downwind of it.
+  for (size_t n = 0; n < num_near_cells; ++n)
+  {
+    const size_t c = near_spls_[n];
+    auto& raw = raw_cells[n];
     const Cell& cell = grid_->GetLocalCell(c);
     bool cell_current_mismatched = false;
 
-    // Cell mapping
-    auto coord_sys = grid_->GetCoordinateSystem();
-    auto swf = SpatialWeightFunction::FromCoordinateType(coord_sys);
     const auto& cell_mapping = sdm.GetCellMapping(cell);
     const size_t cell_num_faces = cell.faces.size();
     const size_t cell_num_nodes = cell_mapping.GetNumNodes();
-    const auto fe_vol_data = cell_mapping.MakeVolumetricFiniteElementData();
+    const bool is_source_cell = raw.is_source_cell;
+    auto& cell_bulk_rhs = raw.bulk_rhs;
+    const auto& bulk_face_rhs_weights = raw.bulk_face_rhs_weights;
+    auto& phi = raw.phi;
+    auto& cell_leakage = raw.leakage;
 
-    // RHS contributions for bulk region cells adjacent to a raytraced cell.
-    std::unordered_map<size_t, std::vector<double>> cell_bulk_rhs;
-    std::vector<std::vector<std::pair<size_t, double>>> bulk_face_rhs_weights(cell_num_faces);
+    if (raw.is_exact_neighbor)
+      ++(raw.integrated_exactly ? exact_neighbor_count : exact_neighbor_fallback_count);
+    if (is_source_cell and not raw.integrated_exactly)
+      log.Log0Warning() << GetName() << ": cell " << cell.global_id
+                        << " containing the point source at " << pt_loc.PrintStr()
+                        << " has a face that is not directly visible from the source. Its "
+                           "flux is projected from quadrature points, which is inaccurate "
+                           "near the source.";
 
-    // The flux is singular at a point source, so neither the least-squares projection nor the
-    // face quadrature resolves it in the cell that contains the source. That cell instead gets
-    // its exact cell-average flux and exact face leakages. Optionally, so do its vertex
-    // neighbors.
-    std::optional<ExactCellIntegrals> exact_integrals;
-    const bool is_source_cell =
-      std::any_of(source_point.subscribers.begin(),
-                  source_point.subscribers.end(),
-                  [c](const auto& subscriber) { return subscriber.cell_local_id == c; });
-    if (is_source_cell or is_exact_neighbor[c])
-      exact_integrals = IntegrateCellExactly(ray_tracer, cell, source_point);
-    if (is_exact_neighbor[c])
-      ++(exact_integrals ? exact_neighbor_count : exact_neighbor_fallback_count);
-    if (is_source_cell)
-    {
-      if (not exact_integrals)
-        log.Log0Warning() << GetName() << ": cell " << cell.global_id
-                          << " containing the point source at " << pt_loc.PrintStr()
-                          << " has a face that is not directly visible from the source. Its "
-                             "flux is projected from quadrature points, which is inaccurate "
-                             "near the source.";
-    }
-
-    // Compute leakages
-    cell_leakage.resize(cell_num_faces);
+    // Retrieve leakage in from incoming faces. Nothing enters through a boundary face, whose
+    // leakage stays zero.
     for (size_t f = 0; f < cell_num_faces; ++f)
-    {
-      const auto orientation = cell_face_orientations_[c][f];
-      face_leakage.assign(num_groups_, 0.);
-
-      // Compute leakage out of outgoing face
-      if (orientation == FOOUTGOING)
+      if (cell_face_orientations_[c][f] == FOINCOMING and cell.faces[f].has_neighbor)
       {
-        // Face data
-        const auto& face = cell.faces[f];
-
-        const Vector3& normal = face.normal;
-        const auto fe_srf_data = cell_mapping.MakeSurfaceFiniteElementData(f);
-        std::vector<std::vector<double>> face_fluxes;
-        std::vector<double> face_omega_n_jxw;
-        face_fluxes.reserve(fe_srf_data.GetQuadraturePointIndices().size());
-        face_omega_n_jxw.reserve(fe_srf_data.GetQuadraturePointIndices().size());
-
-        for (const auto& qp : fe_srf_data.GetQuadraturePointIndices())
-        {
-          const auto& qp_xyz = fe_srf_data.QPointXYZ(qp);
-          const auto omega = ComputeOmega(pt_loc, qp_xyz);
-          const auto phi_qp =
-            RaytraceLine(ray_tracer, cell, qp_xyz, source_point, static_cast<int>(f));
-          const double integrand = (*swf)(qp_xyz)*omega.Dot(normal) * fe_srf_data.JxW(qp);
-
-          for (size_t g = 0; g < num_groups_; ++g)
-            face_leakage[g] += phi_qp[g] * integrand;
-          face_fluxes.push_back(phi_qp);
-          face_omega_n_jxw.push_back(integrand);
-        }
-
-        // Scale the traced face fluxes so that the leakage through the face equals the exact
-        // value. The traced values still set its distribution over face nodes.
-        if (exact_integrals)
-          for (size_t g = 0; g < num_groups_; ++g)
-            if (face_leakage[g] > 0.0)
-            {
-              const double scale = exact_integrals->face_leakage[f][g] / face_leakage[g];
-              for (auto& face_flux : face_fluxes)
-                face_flux[g] *= scale;
-              face_leakage[g] = exact_integrals->face_leakage[f][g];
-            }
-
-        if (face.has_neighbor)
-        {
-          size_t neighbor_id = face.GetNeighborLocalID(grid_.get());
-
-          // Near-source/bulk region interface
-          if (cell_regions_[neighbor_id] == CellRegion::BULK)
-          {
-            // Face data
-            const size_t num_face_nodes = cell_mapping.GetNumFaceNodes(f);
-            const auto fe_srf_data = cell_mapping.MakeSurfaceFiniteElementData(f);
-
-            // Neighbor data
-            const Cell& neighbor = grid_->GetLocalCell(neighbor_id);
-            const auto& neighbor_mapping = sdm.GetCellMapping(neighbor);
-
-            size_t f_ = face.GetNeighborAdjacentFaceIndex(grid_.get());
-            const size_t neighbor_num_face_nodes = neighbor_mapping.GetNumFaceNodes(f_);
-            double face_measure = 0.0;
-            for (const auto& qp : fe_srf_data.GetQuadraturePointIndices())
-              face_measure += (*swf)(fe_srf_data.QPointXYZ(qp)) * fe_srf_data.JxW(qp);
-            OpenSnLogicalErrorIf(face_measure <= 0.0,
-                                 "Invalid surface measure on near-source cell " +
-                                   std::to_string(cell.global_id) + " face " + std::to_string(f) +
-                                   ".");
-
-            for (size_t fi = 0; fi < num_face_nodes; ++fi)
-            {
-              const int i = cell_mapping.MapFaceNode(f, fi);
-
-              int j = -1;
-              for (size_t fj = 0; fj < neighbor_num_face_nodes; ++fj)
-              {
-                const int neighbor_node = neighbor_mapping.MapFaceNode(f_, fj);
-                if (neighbor.vertex_ids[neighbor_node] == cell.vertex_ids[i])
-                {
-                  j = neighbor_node;
-                  break;
-                }
-              }
-              OpenSnLogicalErrorIf(j < 0,
-                                   "Failed to map outgoing uncollided sweep face node from cell " +
-                                     std::to_string(cell.global_id) + " face " + std::to_string(f) +
-                                     " to neighbor cell " + std::to_string(neighbor.global_id) +
-                                     " face " + std::to_string(f_) + ".");
-
-              // Compute rhs for bulk region sweep
-              const auto jr = sdm.MapDOFLocal(neighbor, j);
-              double fallback_rhs_weight = 0.0;
-              size_t qp_index = 0;
-              for (const auto& qp : fe_srf_data.GetQuadraturePointIndices())
-              {
-                // Compute the upwind face contribution to the neighboring bulk
-                // cell's RHS.  The bulk sweep later computes the cell RHS from
-                // destination_phi_, and storing by the neighbor's local DOF keeps
-                // this interface term independent of the current cell's local
-                // face-node ordering.
-                const double integrand = face_omega_n_jxw[qp_index] * fe_srf_data.ShapeValue(i, qp);
-
-                auto& rhs_g = cell_bulk_rhs[jr];
-                if (rhs_g.empty())
-                  rhs_g.assign(num_groups_, 0.0);
-
-                for (size_t g = 0; g < num_groups_; ++g)
-                  rhs_g[g] += face_fluxes[qp_index][g] * integrand;
-                fallback_rhs_weight += (*swf)(fe_srf_data.QPointXYZ(qp)) *
-                                       fe_srf_data.ShapeValue(i, qp) * fe_srf_data.JxW(qp);
-                ++qp_index;
-              } // for qp
-              bulk_face_rhs_weights[f].emplace_back(jr, fallback_rhs_weight / face_measure);
-            } // for fi
-          } // if neighbor_id in bulk_spls_
-        } // if face.has_neighbor
-      } // if outgoing
-
-      // Retrieve leakage in from incoming face. Nothing enters through a boundary face, whose
-      // leakage stays zero.
-      else if (orientation == FOINCOMING and cell.faces[f].has_neighbor)
-      {
-        size_t neigh_id = cell.faces[f].GetNeighborLocalID(grid_.get());
-        size_t neigh_face_ind = cell.faces[f].GetNeighborAdjacentFaceIndex(grid_.get());
-        face_leakage = leakages[neigh_id][neigh_face_ind];
+        const size_t neigh_id = cell.faces[f].GetNeighborLocalID(grid_.get());
+        const size_t neigh_face_ind = cell.faces[f].GetNeighborAdjacentFaceIndex(grid_.get());
+        OpenSnLogicalErrorIf(near_index[neigh_id] == not_near_source,
+                             GetName() + ": near-source cell " + std::to_string(cell.global_id) +
+                               " has an upwind cell outside the near-source region.");
+        cell_leakage[f] = raw_cells[near_index[neigh_id]].leakage[neigh_face_ind];
       }
-
-      // Save leakage through face
-      cell_leakage[f] = face_leakage;
-    }
-
-    // Save leakage through cell faces
-    leakages.emplace(c, cell_leakage);
-
-    // Ray-traced solution in cell
-    std::vector<Vector<double>> phi(num_groups_, Vector<double>(cell_num_nodes, 0.));
-
-    if (exact_integrals and is_source_cell)
-    {
-      // Represent the source cell by its exact cell-average flux.
-      const auto& intV_shapeI = unit_cell_matrices_[c].intV_shapeI;
-      const double cell_volume = std::accumulate(intV_shapeI.begin(), intV_shapeI.end(), 0.0);
-      for (size_t g = 0; g < num_groups_; ++g)
-        phi[g].Set(exact_integrals->volume_integral[g] / cell_volume);
-    }
-    else
-    {
-      // Mass matrix times least-squares flux vector
-      for (const auto& qp : fe_vol_data.GetQuadraturePointIndices())
-      {
-        // Raytrace to point
-        Vector3 qp_xyz = fe_vol_data.QPointXYZ(qp);
-
-        std::vector<double> phi_qp = RaytraceLine(ray_tracer, cell, qp_xyz, source_point);
-
-        for (unsigned int i = 0; i < cell_num_nodes; ++i)
-        {
-          // Integrand value at quadrature point
-          double integrand =
-            (*swf)(fe_vol_data.QPointXYZ(qp)) * fe_vol_data.ShapeValue(i, qp) * fe_vol_data.JxW(qp);
-
-          // Compute group-wise least-squares fluxes
-          for (size_t g = 0; g < num_groups_; ++g)
-            phi[g](i) += phi_qp[g] * integrand;
-        }
-      }
-
-      // Invert mass matrix
-      for (size_t g = 0; g < num_groups_; ++g)
-      {
-        auto mass_matrix = unit_cell_matrices_[c].intV_shapeI_shapeJ;
-        GaussElimination(mass_matrix, phi[g], static_cast<int>(cell_num_nodes));
-      }
-
-      // Keep the projected shape but match the exact volume integral, or use the exact average
-      // when the projection has no positive integral to scale.
-      if (exact_integrals)
-      {
-        const auto& intV_shapeI = unit_cell_matrices_[c].intV_shapeI;
-        const double cell_volume = std::accumulate(intV_shapeI.begin(), intV_shapeI.end(), 0.0);
-        for (size_t g = 0; g < num_groups_; ++g)
-        {
-          double projected_integral = 0.0;
-          for (size_t i = 0; i < cell_num_nodes; ++i)
-            projected_integral += intV_shapeI(i) * phi[g](i);
-          if (projected_integral > 0.0)
-            phi[g].Scale(exact_integrals->volume_integral[g] / projected_integral);
-          else
-            phi[g].Set(exact_integrals->volume_integral[g] / cell_volume);
-        }
-      }
-    }
 
     // Transport view
     const auto& transport_view = cell_transport_views_[c];
@@ -1803,7 +1879,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
     for (size_t f = 0; f < cell_num_faces; ++f)
       if (cell_face_orientations_[c][f] == FOINCOMING)
         for (size_t g = 0; g < num_groups_; ++g)
-          source[g] += leakages[c][f][g];
+          source[g] += cell_leakage[f][g];
 
     // Apply the cell-wise correction from Woodsford et al. (2026), Eqs. (24)-(25).
     for (size_t g = 0; g < num_groups_; ++g)
@@ -1811,7 +1887,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
       double outgoing_leakage = 0.0;
       for (size_t f = 0; f < cell_num_faces; ++f)
         if (cell_face_orientations_[c][f] == FOOUTGOING)
-          outgoing_leakage += leakages[c][f][g];
+          outgoing_leakage += cell_leakage[f][g];
 
       double projected_integral = 0.0;
       for (size_t i = 0; i < cell_num_nodes; ++i)
@@ -1862,7 +1938,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
         for (size_t f = 0; f < cell_num_faces; ++f)
           if (cell_face_orientations_[c][f] == FOOUTGOING)
           {
-            leakages[c][f][g] = face_share;
+            cell_leakage[f][g] = face_share;
             for (const auto& [jr, weight] : bulk_face_rhs_weights[f])
               cell_bulk_rhs[jr][g] += face_share * weight;
           }
@@ -1872,7 +1948,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
         // Apply the shared correction to leakage and the bulk interface source.
         for (size_t f = 0; f < cell_num_faces; ++f)
           if (cell_face_orientations_[c][f] == FOOUTGOING)
-            leakages[c][f][g] *= alpha;
+            cell_leakage[f][g] *= alpha;
         for (auto& [jr, rhs_g] : cell_bulk_rhs)
           rhs_g[g] *= alpha;
       }
@@ -1881,7 +1957,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
         if (not cell.faces[f].has_neighbor and
             not IsReflectingBoundary(cell.faces[f].neighbor_id) and
             cell_face_orientations_[c][f] == FOOUTGOING)
-          out_flow_ += leakages[c][f][g];
+          out_flow_ += cell_leakage[f][g];
     }
 
     // The bulk sweep receives the analytic ray-traced interface current.
