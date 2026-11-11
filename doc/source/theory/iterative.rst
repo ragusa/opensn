@@ -1176,6 +1176,17 @@ Notes:
    on the group. Both are the same integral, evaluated at the same quadrature
    points; see :ref:`material-hull-tracer`.
 
+#. The near-source treatment described next can be applied to every cell
+   (``method="ray_trace"``): all cells are then ray traced and corrected for
+   conservation from the source outward, and no cell is swept. The ray-traced
+   data of a cell, its projected flux and the leakage through its faces, do not
+   depend on the other cells. The correction of a cell needs only the
+   corrected leakage of the cells upwind of it, a few numbers per face and
+   group. With the material-hull tracer, each MPI rank therefore traces its own
+   cells without communication, and the correction is done for the cells of
+   all ranks on one rank, in an order that depends only on the mesh, so the
+   result does not depend on the partitioning.
+
 #. Near a localized source the uncollided flux varies too steeply for the
    far-field treatment, and the cells that contain the source need a
    treatment of their own. The flux of a point source is singular at the
@@ -1250,12 +1261,14 @@ Notes:
    The point source enters the balance of the source cell as
    :math:`S\,\Omega_c/(4\pi)`, where :math:`\Omega_c` is the solid angle the
    cell subtends at the source, computed exactly from the cell's faces. It
-   equals :math:`S` for a source inside the cell. A source must belong to
-   exactly one cell, so a source on a vacuum boundary lies inside a boundary
-   face of its cell, or on a boundary edge or vertex that no other cell
-   shares. The remaining fraction then leaves the domain directly and is
-   counted as outflow. Sources on a reflecting boundary are rejected, because
-   such a source coincides with its own image.
+   equals :math:`S` for a source inside the cell, which must then be the only
+   cell that contains it. A source on a vacuum boundary may belong to several
+   cells, for example at a corner of the domain where several cells meet. Each
+   of them receives :math:`S\,\Omega_c/(4\pi)`, and the faces between them,
+   whose planes contain the source, carry no current. The remaining fraction
+   leaves the domain directly and is counted as outflow. Sources on a
+   reflecting boundary are rejected, because such a source coincides with its
+   own image.
 
    When the source is close to an edge or vertex of its cell, it is also close
    to the cells that share that edge or vertex. Their quadrature leakages are
@@ -1304,7 +1317,8 @@ Notes:
    and the spatial mesh should be selected together so the point sources do
    not lie close to cell boundaries. Convergence must be checked with respect
    to both discretizations. The uncollided problem uses explicit point sources
-   and must run with exactly one MPI rank. On that rank, physical sources are
+   and, except when every cell is ray traced as described below, must run with
+   exactly one MPI rank. On that rank, physical sources are
    processed sequentially. ``OPENSN_NUM_THREADS`` parallelizes the ray tracing
    of the near-source region over cells, the bulk sweep over energy groups and
    reflected-image projection over cells; the conservation correction, which

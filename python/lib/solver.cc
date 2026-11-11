@@ -994,12 +994,13 @@ WrapLBS(py::module& slv)
         planar, mutually orthogonal symmetry planes without an opposing
         reflecting plane.
     point_sources : List[pyopensn.source.PointSource], default=[]
-        Explicit point sources. At least one point source is required. For now,
-        each source must belong to a single cell; sources exactly on faces,
-        edges, or vertices shared by more than one cell are rejected, as are
-        sources on a reflecting boundary. A source on a vacuum boundary emits
-        into the domain only the fraction of its strength in the solid angle
-        that its cell subtends; the rest is counted as outflow.
+        Explicit point sources. At least one point source is required. Inside
+        the domain a source must belong to a single cell; sources exactly on
+        faces, edges, or vertices shared by more than one cell are rejected,
+        as are sources on a reflecting boundary. A source on a vacuum boundary
+        may be shared by several cells, for example at a corner of the domain.
+        It emits into each of its cells only the fraction of its strength in
+        the solid angle that the cell subtends; the rest is counted as outflow.
     near_source : List[pyopensn.logvol.LogicalVolume]
         Near-source ray-traced region for each point source, in the same order
         as ``point_sources``. With ``method='sweep'`` this list is required
@@ -1047,8 +1048,10 @@ WrapLBS(py::module& slv)
     Notes
     -----
     Only explicit point sources are supported by the uncollided generator.
-    Each point source must belong to a single cell. Uncollided generation must
-    run on a Cartesian three-dimensional mesh with exactly one MPI rank.
+    Uncollided generation must run on a Cartesian three-dimensional mesh. It
+    requires exactly one MPI rank, except with ``method='ray_trace'`` and
+    ``ray_tracer='material_hull'``, which run on any number of ranks and give
+    a result that does not depend on the partitioning.
 
     Point-source placement affects spatial accuracy. The cell containing a
     source is represented by its exact cell average, but a source close to an

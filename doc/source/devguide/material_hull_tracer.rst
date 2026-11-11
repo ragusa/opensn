@@ -237,6 +237,44 @@ each cell was off by a similar amount. That fallback remains for meshes with
 non-convex cells or faces of more than eight vertices, for which the walk has
 no precomputed face data; the paths that take it are counted in a warning.
 
+Ray tracing every cell on several ranks
+---------------------------------------
+
+With ``method="ray_trace"`` every cell is traced and corrected, and with the
+material-hull tracer this runs on several ranks. The work is split in two.
+
+``TraceNearSourceCell`` computes what a cell needs from ray tracing: the leakage
+through its outgoing faces, its projected flux, and the exact integrals of the
+cells next to the source. It reads nothing that another cell writes. Each rank
+runs it for its own cells, on ``OPENSN_NUM_THREADS`` threads, against its copy
+of the hull.
+
+``CorrectCellBalance`` applies the conservation correction to one cell. Its
+inputs are the corrected leakage of the cells upwind and a few numbers of the
+cell itself: its raw leakages, the integral of its projected flux, its total
+cross section and the part of the source emitted into it.
+``CorrectRayTracedCells`` gathers these numbers from all ranks on rank 0, where
+the cells of the whole mesh are corrected from the source outward: a cell is
+ready when the cells upwind of it are done, and among the ready cells the lowest
+global id goes first. The scale factors are then sent back to the ranks, which
+scale their fluxes. The order depends only on the mesh, so the fluxes, and the
+round-off of the totals, do not depend on the partitioning. Rank 0 holds
+:math:`O(\text{faces} \times \text{groups})` numbers during the correction,
+which is less than the flux moments it gathers to write the output file.
+
+Two more things make the run collective:
+
+- The orientation of a face is decided by the cell with the lower global id. On
+  a partition boundary that cell can be a ghost; the rank then decides from the
+  ghost's copy of the face, which has the same vertices and therefore the same
+  centroid and normal as on the rank that owns it.
+- Rank 0 creates and writes the output file. A failure there is rethrown on
+  every rank, so that no rank waits for a rank that has stopped.
+
+The default method keeps its own correction loop, because the corrected leakage
+of a near-source cell also feeds the sweep of the bulk cells next to it; it
+calls the same ``CorrectCellBalance``.
+
 Tests
 -----
 
@@ -247,5 +285,13 @@ down directly and the length of a segment in each material is obtained by
 clipping the segment against every box. The tests cover segments through hull
 vertices and edges, a non-convex region that is entered more than once, an edge
 where three materials meet, start points on a facet, end points at a corner of
-the domain, tracing against every cell face, and the cell-by-cell walk of
-``RayTracer``.
+the domain, tracing against every cell face, the cell-by-cell walk of
+``RayTracer``, and every quadrature point of a regular mesh whose source is
+placed so that some paths pass exactly through mesh edges.
+
+The regression tests in
+``test/python/modules/linear_boltzmann_solvers/transport_uncollided`` run the
+analytic uncollided problems with both tracers against the same reference
+values, compare the two tracers and the two tracer backends directly, and run
+``method="ray_trace"`` on one, two and four ranks with the same reference
+values.

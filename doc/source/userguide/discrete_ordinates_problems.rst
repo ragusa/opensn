@@ -655,6 +655,71 @@ meant for verification. See :ref:`material-hull-tracer` for the method.
        ray_tracer="material_hull",
    )
 
+Ray tracing every cell
+----------------------
+
+By default (``method="sweep"``) only the cells of the near-source regions are
+ray traced, and the uncollided flux in the other cells comes from a sweep of
+the advection-removal equation from the source outward. With
+``method="ray_trace"`` there is no sweep and no near-source region: every cell
+is ray traced and then corrected for conservation, from the source outward,
+exactly as the near-source cells are. ``near_source`` must then be omitted.
+
+.. code-block:: python
+
+   uncollided = UncollidedProblem(
+       mesh=mesh,
+       num_groups=1,
+       groupsets=[{"groups_from_to": [0, 0]}],
+       xs_map=xs_map,
+       point_sources=[point_source],
+       scattering_order=1,
+       method="ray_trace",
+       ray_tracer="material_hull",
+   )
+
+The flux in every cell is then the projection of the exact point kernel, scaled
+so that the cell balance closes, instead of the solution of a discretized
+equation. This removes the numerical diffusion of the sweep, at the cost of
+tracing every volume and face quadrature point of the mesh for every source:
+about 130 points for a tetrahedron and 340 for a hexahedron. Use it with
+``ray_tracer="material_hull"``, whose cost per path does not grow with the
+number of cells the path crosses. The domain must be such that the source sees
+every cell through the mesh; a path that leaves the mesh is an error.
+
+With ``ray_tracer="material_hull"`` this method runs on any number of MPI
+ranks. Each rank traces its own cells and no path is handed from one rank to
+another. The conservation correction, which couples each cell to the cells
+upwind of it, is done for all cells on rank 0 from a few numbers per face and
+group, and the output file is written by rank 0. The result does not depend on
+the partitioning. The other combinations of ``method`` and ``ray_tracer``
+require one rank.
+
+Conservation report
+-------------------
+
+For each source the solver reports the conservation correction of the
+ray-traced cells: the smallest and largest scale factor :math:`\alpha`, the
+number of cell-group pairs in bands of :math:`|\alpha - 1|`, the number of
+pairs in which the removal vanishes and the outgoing faces share the source
+equally, and the largest balance residual left in a cell, relative to what
+enters the cell. The residual is at round-off, in voids too.
+
+The scale factor reconciles two quadratures of the same ray-traced field, the
+leakage through the faces and the removal in the volume. It is close to one
+where both resolve the flux. A factor far from one marks a cell where they do
+not: next to the source, in an optically thick cell, or in a cell cut by the
+shadow of a material edge, where the flux is discontinuous. The correction
+closes the balance of such a cell but does not recover the shape of the flux in
+it; refine the mesh there.
+
+``diagnostics_file`` on :py:class:`pyopensn.solver.UncollidedSolver` names a
+second HDF5 file that holds the scale factor and the balance residual of every
+ray-traced cell and the balance residual of every swept cell, for each source.
+The solver ends with the wall time spent in each phase: material hull, cell
+ordering, ray tracing, conservation correction, bulk sweep, image sources,
+balance and moments, and output.
+
 Source support
 --------------
 
@@ -669,15 +734,22 @@ problem.
 Uncollided generation is forward only. The generator rejects adjoint mode, both
 ``options={'adjoint': True}`` at construction and a later ``SetAdjoint(True)``.
 
-Every point source requires a corresponding entry in ``near_source``. The two
-lists are matched by position, so ``near_source`` is required whenever
-``point_sources`` is nonempty.
+With ``method="sweep"`` every point source requires a corresponding entry in
+``near_source``. The two lists are matched by position, so ``near_source`` is
+required whenever ``point_sources`` is nonempty. With ``method="ray_trace"``
+there is no near-source region.
 
-For now, uncollided generation requires each point source to belong to a single
-cell. A source located exactly on a face, edge, or vertex shared by more than
-one cell is rejected as unsupported, as is a source on a reflecting boundary. A
-source on a vacuum boundary emits into the domain only the fraction of its
-strength in the solid angle its cell subtends; the rest is counted as outflow.
+Inside the domain, a point source must belong to a single cell: a source
+located exactly on a face, edge, or vertex shared by more than one cell is
+rejected as unsupported. A source on a vacuum boundary may lie anywhere on it,
+including on an edge or a vertex shared by several cells, such as the corner of
+a symmetric model. It emits into each of its cells only the fraction of its
+strength in the solid angle that cell subtends; the rest leaves the domain
+directly and is counted as outflow. A source on a reflecting boundary is
+rejected, because it coincides with its own image; model the symmetry planes
+through such a source as vacuum boundaries, which is exact for the uncollided
+flux of a source on them. With ``ray_tracer="material_hull"`` the cells of a
+source must all have the same block id.
 
 .. important::
 
@@ -804,12 +876,17 @@ problem's :math:`S_n` angular quadrature.
 Serial generation and parallel reuse
 ------------------------------------
 
-Uncollided generation must run with exactly one MPI rank. The resulting HDF5
-file is partition-independent: every rank in the collided calculation reads
-the same serial file and extracts the cells it owns. Consequently, the
-collided calculation may use one or multiple MPI ranks.
+Uncollided generation must run with exactly one MPI rank, unless every cell is
+ray traced against the material hull (``method="ray_trace"`` with
+``ray_tracer="material_hull"``), which runs on any number of ranks; see
+`Ray tracing every cell`_. In both cases the resulting HDF5 file is
+partition-independent: every rank in the collided calculation reads the same
+file and extracts the cells it owns. Consequently, the collided calculation may
+use one or multiple MPI ranks, whatever the number of ranks that generated the
+file.
 
-For a parallel workflow, run the two stages separately:
+For a parallel workflow with a generation that requires one rank, run the two
+stages separately:
 
 1. Generate the HDF5 file with one rank.
 2. Run the collided input with the desired number of ranks.
