@@ -38,6 +38,11 @@ point_value = uncollided_utils.point_value
 remove_file = uncollided_utils.remove_file
 uncollided_3d = uncollided_utils.uncollided_3d
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
+
 SIGMA_T = 0.25
 H = 0.05
 LOWER = (-0.7, 0.0, -0.4)
@@ -78,6 +83,7 @@ def relative_errors(grid, exact_near_source_leakage, points, file_name):
         near_source=[near_source_region],
         scattering_order=0,
         exact_near_source_leakage=exact_near_source_leakage,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

@@ -36,6 +36,10 @@ point_value = uncollided_utils.point_value
 relative_error = uncollided_utils.relative_error
 remove_file = uncollided_utils.remove_file
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 def reference_flux(source, point, sigma_t):
     source_u = source[0] + 0.35 * source[1]
@@ -80,6 +84,7 @@ def solve(grid, sigma_t, source, sample_points, file_name):
         point_sources=[PointSource(location=list(source), strength=[1.0])],
         near_source=[near_source_region],
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

@@ -35,6 +35,10 @@ uncollided_escape_3d_box = uncollided_utils.uncollided_escape_3d_box
 point_value = uncollided_utils.point_value
 volume_integral = uncollided_utils.volume_integral
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 if __name__ == "__main__":
     if size != 1:
@@ -67,6 +71,7 @@ if __name__ == "__main__":
         point_sources=[PointSource(location=list(source), strength=[1.0])],
         near_source=[whole_domain],
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

@@ -82,6 +82,29 @@
     ]
   },
   {
+    "file": "uncollided_source_cell_average.py",
+    "comment": "Exact source-cell average flux for interior and vacuum-boundary sources, against an independent face-integral reference, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_source_cell_average_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedSourceCellInteriorError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedSourceCellBoundaryError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-08
+      }
+    ]
+  },
+  {
     "file": "uncollided_boundary_source_prism.py",
     "comment": "Source on a vacuum boundary face of a prism mesh whose plane coordinate is not exactly representable, against the box escape probability and the point kernel",
     "num_procs": 1,
@@ -101,9 +124,55 @@
     ]
   },
   {
+    "file": "uncollided_boundary_source_prism.py",
+    "comment": "Source on a vacuum boundary face of a prism mesh whose plane coordinate is not exactly representable, against the box escape probability and the point kernel, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_boundary_source_prism_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedBoundarySourcePrismOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedBoundarySourcePrismMaxRelativeError=",
+        "goldvalue": 0.015965,
+        "abs_tol": 0.005
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_exact_near_source_leakage.py",
     "comment": "Exact near-source leakage for a source close to a vertex of its cell, against the exact point-source solution",
     "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedExactLeakageRMSError=",
+        "goldvalue": 0.0164517,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedExactLeakageMaxError=",
+        "goldvalue": 0.03689925,
+        "abs_tol": 0.006
+      }
+    ]
+  },
+  {
+    "file": "uncollided_3d_exact_near_source_leakage.py",
+    "comment": "Exact near-source leakage for a source close to a vertex of its cell, against the exact point-source solution, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_exact_near_source_leakage_material_hull",
     "checks": [
       {
         "type": "KeyValuePair",
@@ -164,6 +233,41 @@
     ]
   },
   {
+    "file": "uncollided_3d_reflecting.py",
+    "comment": "Three reflecting symmetry planes against the exact image-source solution, with exact near-source leakage, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_reflecting_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedReflecting3DMaxAnalyticError=",
+        "goldvalue": 0.009516904,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedReflecting3DRecombinationError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedReflecting3DCombinedBalance=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedReflecting3DMismatchRejected=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_polyhedral_reflecting.py",
     "comment": "Reflected uncollided transport on a true polyhedral pMesh against the analytic image-source solution",
     "num_procs": 1,
@@ -187,9 +291,59 @@
     ]
   },
   {
+    "file": "uncollided_3d_polyhedral_reflecting.py",
+    "comment": "Reflected uncollided transport on a true polyhedral pMesh against the analytic image-source solution, with the material-hull ray tracer",
+    "num_procs": 1,
+    "env": {
+      "OPENSN_NUM_THREADS": 4
+    },
+    "weight_class": "intermediate",
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_polyhedral_reflecting_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedPolyhedralVolumeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedPolyhedralReflectingMaxError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.01
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_structured_analytic.py",
     "comment": "3D hexahedral cell-average positivity and global outflow against the exact escape fraction",
     "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DStructuredNegativeCellAverageViolation=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-14
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DStructuredOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0005
+      }
+    ]
+  },
+  {
+    "file": "uncollided_3d_structured_analytic.py",
+    "comment": "3D hexahedral cell-average positivity and global outflow against the exact escape fraction, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_structured_analytic_material_hull",
     "checks": [
       {
         "type": "KeyValuePair",
@@ -243,6 +397,47 @@
     ]
   },
   {
+    "file": "uncollided_3d_prism_analytic.py",
+    "comment": "3D prism scalar flux and P1 moments against the exact point-source solution, bulk positivity, and global outflow, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_prism_analytic_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DPrismMaxScalarRelativeError=",
+        "goldvalue": 0.02959326,
+        "abs_tol": 0.008
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DPrismMaxP1ScaledError=",
+        "goldvalue": 0.03488252,
+        "abs_tol": 0.008
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DPrismRecombinationError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DPrismBulkMinimumScalarFlux=",
+        "goldvalue": 0.006443981,
+        "abs_tol": 0.001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DPrismOutflowRelativeError=",
+        "goldvalue": 0.0005795592,
+        "abs_tol": 0.0002
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_heterogeneous.py",
     "comment": "Attenuation across a planar material interface, as a ratio to a homogeneous solve and absolutely",
     "num_procs": 1,
@@ -262,9 +457,55 @@
     ]
   },
   {
+    "file": "uncollided_3d_heterogeneous.py",
+    "comment": "Attenuation across a planar material interface, as a ratio to a homogeneous solve and absolutely, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_heterogeneous_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DHeterogeneousRatioError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.01
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DHeterogeneousRelativeError=",
+        "goldvalue": 0.06944977,
+        "abs_tol": 0.015
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_oblique_layers.py",
     "comment": "Attenuation through oblique material layers on an extruded mesh, as a ratio to a homogeneous solve and absolutely",
     "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DObliqueLayersRatioError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.002
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DObliqueLayersError=",
+        "goldvalue": 0.1209062,
+        "abs_tol": 0.025
+      }
+    ]
+  },
+  {
+    "file": "uncollided_3d_oblique_layers.py",
+    "comment": "Attenuation through oblique material layers on an extruded mesh, as a ratio to a homogeneous solve and absolutely, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_oblique_layers_material_hull",
     "checks": [
       {
         "type": "KeyValuePair",
@@ -319,10 +560,118 @@
     ]
   },
   {
+    "file": "uncollided_3d_multigroup_analytic.py",
+    "comment": "3D two-group attenuation: group decoupling and agreement with the exact solution, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_multigroup_analytic_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DMultigroupDecouplingDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DMultigroupMaxError=",
+        "goldvalue": 0.03814459,
+        "abs_tol": 0.008
+      }
+    ]
+  },
+  {
+    "file": "uncollided_3d_void_layers.py",
+    "comment": "Flux through a void and a near-void layer against the point kernel, and the balance reported by the solver to round-off",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedVoidLayersMaxRelativeError=",
+        "goldvalue": 0.0110728,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_3d_void_layers.py",
+    "comment": "Flux through a void and a near-void layer against the point kernel, and the balance reported by the solver to round-off, with the material-hull ray tracer",
+    "num_procs": 1,
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_void_layers_material_hull",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedVoidLayersMaxRelativeError=",
+        "goldvalue": 0.0110728,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_tracer_equivalence.py",
+    "comment": "Cell-walk and material-hull ray tracers agree to round-off on a three-material problem with a reflecting boundary; the two hull tracer backends agree exactly",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTracerEquivalenceWalkHullMaxRelDiff=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-11
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTracerEquivalenceBackendMaxRelDiff=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTracerEquivalenceFluxNonzero=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_unstructured_analytic.py",
     "comment": "3D tetrahedral scalar-flux mesh convergence with exact near-source leakage",
     "num_procs": 1,
     "weight_class": "intermediate",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "Uncollided3DFineMaxError=",
+        "goldvalue": 0.005107384,
+        "abs_tol": 0.0015
+      }
+    ]
+  },
+  {
+    "file": "uncollided_3d_unstructured_analytic.py",
+    "comment": "3D tetrahedral scalar-flux mesh convergence with exact near-source leakage, with the material-hull ray tracer",
+    "num_procs": 1,
+    "weight_class": "intermediate",
+    "args": [
+      "ray_tracer=\"material_hull\""
+    ],
+    "outfileprefix": "uncollided_3d_unstructured_analytic_material_hull",
     "checks": [
       {
         "type": "KeyValuePair",

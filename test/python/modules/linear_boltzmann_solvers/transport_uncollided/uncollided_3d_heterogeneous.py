@@ -35,6 +35,10 @@ point_value = uncollided_utils.point_value
 relative_error = uncollided_utils.relative_error
 remove_file = uncollided_utils.remove_file
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 def optical_path(source, point, sigma_left, sigma_right):
     # The segment crosses the x = 0 interface; split its length by the x fractions.
@@ -73,6 +77,7 @@ def solve(grid, sigma_left, sigma_right, source, point, file_name):
         point_sources=[PointSource(location=list(source), strength=[1.0])],
         near_source=[near_source_region],
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

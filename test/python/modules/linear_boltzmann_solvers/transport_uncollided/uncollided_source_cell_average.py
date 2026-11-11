@@ -46,6 +46,11 @@ relative_error = uncollided_utils.relative_error
 remove_file = uncollided_utils.remove_file
 box_angular_integral = uncollided_utils.box_angular_integral
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
+
 SIGMA_T = 2.0
 STRENGTH = 1.0
 
@@ -80,6 +85,7 @@ def computed_average(source, cell_bounds, file_name):
         point_sources=[PointSource(location=list(source), strength=[STRENGTH])],
         near_source=[region],
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

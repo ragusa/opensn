@@ -33,6 +33,10 @@ relative_error = uncollided_utils.relative_error
 remove_file = uncollided_utils.remove_file
 uncollided_3d = uncollided_utils.uncollided_3d
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 def compute_error(mesh_name, file_name):
     grid = FromFileMeshGenerator(filename=mesh_path(mesh_name)).Execute()
@@ -67,6 +71,7 @@ def compute_error(mesh_name, file_name):
         near_source=[near_source_region],
         exact_near_source_leakage=True,
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

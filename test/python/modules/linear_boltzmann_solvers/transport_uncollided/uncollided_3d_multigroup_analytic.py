@@ -33,6 +33,10 @@ relative_error = uncollided_utils.relative_error
 remove_file = uncollided_utils.remove_file
 uncollided_3d = uncollided_utils.uncollided_3d
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 def solve(grid, xs_map, num_groups, source, strength, sample_points, file_name):
     # Small region around the source
@@ -54,6 +58,7 @@ def solve(grid, xs_map, num_groups, source, strength, sample_points, file_name):
         point_sources=[PointSource(location=list(source), strength=strength)],
         near_source=[near_source_region],
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=file_name)
     solver.Initialize()

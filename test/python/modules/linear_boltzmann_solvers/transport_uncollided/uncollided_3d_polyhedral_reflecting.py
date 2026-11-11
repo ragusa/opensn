@@ -30,6 +30,10 @@ if "opensn_console" not in globals():
 sys.path.append(os.path.dirname(__file__))
 utils = importlib.import_module("uncollided_unstructured_utils")
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 def analytic_flux(source, point, sigma_t):
     image = (-source[0], source[1], source[2])
@@ -79,6 +83,7 @@ if __name__ == "__main__":
         boundary_conditions=[{"name": "xmin", "type": "reflecting"}],
         exact_near_source_leakage=True,
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     solver = UncollidedSolver(problem=problem, file_name=output_file, progress_interval=0)
     solver.Initialize()

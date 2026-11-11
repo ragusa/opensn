@@ -36,6 +36,10 @@ point_value = uncollided_utils.point_value
 relative_error = uncollided_utils.relative_error
 remove_file = uncollided_utils.remove_file
 
+# Optional argument: the ray tracer of the uncollided problem.
+if "ray_tracer" not in globals():
+    ray_tracer = "cell_walk"
+
 
 def analytic_flux(source, images, point, sigma_t):
     flux = 0.0
@@ -93,6 +97,7 @@ if __name__ == "__main__":
         exact_near_source_leakage=True,
         boundary_conditions=boundary_conditions,
         scattering_order=0,
+        ray_tracer=ray_tracer,
     )
     uncollided_solver = UncollidedSolver(problem=uncollided, file_name=file_name)
     uncollided_solver.Initialize()

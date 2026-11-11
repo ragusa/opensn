@@ -8,6 +8,8 @@
 #include "framework/mesh/raytrace/material_hull.h"
 #include "framework/mesh/raytrace/raytracer.h"
 #include "framework/mesh/raytrace/segment_tracer.h"
+#include "framework/math/spatial_discretization/finite_element/piecewise_linear/piecewise_linear_discontinuous.h"
+#include "framework/math/spatial_discretization/cell_mappings/cell_mapping.h"
 #include "framework/runtime.h"
 #include <filesystem>
 #include <random>
@@ -761,4 +763,118 @@ TEST(SegmentTracerTest, TetrahedralHullMatchesAllFacesAndCellWalk)
   // Both materials are sampled.
   EXPECT_GT(length_in_first, side);
   EXPECT_GT(length_in_second, side);
+}
+
+TEST(SegmentTracerTest, QuadraturePointsOfEveryCellMatchVoxelReference)
+{
+  // The points an uncollided calculation traces from: the volume quadrature points of every
+  // cell and the quadrature points of its faces that look away from the source, which lie on a
+  // hull facet when the face is a material interface or a boundary. The mesh is regular and the
+  // source is at simple coordinates, so some paths pass exactly through an edge of the mesh: in
+  // the xy plane the path from (-0.75, 0.625) to the source has a slope of -3/4 and goes
+  // through the mesh edge at (-0.25, 0.25).
+  struct Box
+  {
+    std::array<double, 3> lower, upper;
+    unsigned int block_id;
+  };
+  const std::vector<Box> boxes = {{{-2.0, 0.25, -2.0}, {2.0, 0.75, 2.0}, 1},
+                                  {{-0.5, 0.25, -0.25}, {0.25, 0.5, 0.5}, 2}};
+  const Vector3 source(0.31, -0.17, 0.12);
+
+  std::vector<double> nodes;
+  for (int i = 0; i <= 8; ++i)
+    nodes.push_back(-1.0 + 0.25 * i);
+  const auto grid = BuildOrthogonalMesh({nodes, nodes, nodes});
+  grid->SetUniformBlockID(0);
+  hull_test::VoxelModel model(8, 8, 8, Vector3(-1.0, -1.0, -1.0), Vector3(0.25, 0.25, 0.25));
+  for (const auto& box : boxes)
+  {
+    auto params = RPPLogicalVolume::GetInputParameters();
+    ParameterBlock block;
+    const char* lower_names[3] = {"xmin", "ymin", "zmin"};
+    const char* upper_names[3] = {"xmax", "ymax", "zmax"};
+    for (int axis = 0; axis < 3; ++axis)
+    {
+      block.AddParameter(lower_names[axis], box.lower[axis]);
+      block.AddParameter(upper_names[axis], box.upper[axis]);
+    }
+    params.AssignParameters(block);
+    grid->SetBlockIDFromLogicalVolume(RPPLogicalVolume(params), box.block_id, true);
+
+    for (int k = 0; k < 8; ++k)
+      for (int j = 0; j < 8; ++j)
+        for (int i = 0; i < 8; ++i)
+        {
+          const Vector3 center = model.Center(i, j, k);
+          if (center.x > box.lower[0] and center.x < box.upper[0] and center.y > box.lower[1] and
+              center.y < box.upper[1] and center.z > box.lower[2] and center.z < box.upper[2])
+            model.At(i, j, k) = static_cast<int>(box.block_id);
+        }
+  }
+
+  const auto hull = MaterialHull::Extract(*grid);
+  const auto tracer = SegmentTracer::Create("bvh", hull);
+  const std::uint32_t source_material = MaterialIndex(model, source);
+  const auto discretization = PieceWiseLinearDiscontinuous::New(grid, QuadratureOrder::FOURTH);
+
+  std::size_t num_points = 0;
+  std::size_t num_face_points_on_hull = 0;
+  double worst_error = 0.0;
+  const auto check = [&](const Cell& cell, const Vector3& point, const int face)
+  {
+    ++num_points;
+    const auto traced = TraceOne(*tracer, point, source, source_material);
+    const auto expected = model.Lengths(point, source);
+    for (std::size_t m = 0; m < expected.size(); ++m)
+      worst_error = std::max(worst_error, std::abs(traced.lengths[m] - expected[m]));
+
+    // A point in the cell starts in the material of the cell; a point on a face may also be
+    // found on the far side of the face.
+    const std::uint32_t cell_material = hull->GetMaterialIndex(cell.block_id);
+    if (face < 0)
+    {
+      EXPECT_EQ(traced.start_material, cell_material) << point.PrintStr();
+      return;
+    }
+    const auto& cell_face = cell.faces[face];
+    const std::uint32_t far_material =
+      cell_face.has_neighbor
+        ? hull->GetMaterialIndex(grid->GetGlobalCell(cell_face.neighbor_id).block_id)
+        : hull->GetExteriorIndex();
+    EXPECT_TRUE(traced.start_material == cell_material or traced.start_material == far_material)
+      << point.PrintStr();
+    if (far_material != cell_material)
+      ++num_face_points_on_hull;
+  };
+
+  for (const auto& cell : grid->GetLocalCells())
+  {
+    const auto& mapping = discretization->GetCellMapping(*cell);
+    const auto volume_data = mapping.MakeVolumetricFiniteElementData();
+    for (const auto qp : volume_data.GetQuadraturePointIndices())
+      check(*cell, volume_data.QPointXYZ(qp), -1);
+    for (std::size_t f = 0; f < cell->faces.size(); ++f)
+    {
+      if ((cell->faces[f].centroid - source).Dot(cell->faces[f].normal) <= 0.0)
+        continue;
+      const auto surface_data = mapping.MakeSurfaceFiniteElementData(f);
+      for (const auto qp : surface_data.GetQuadraturePointIndices())
+        check(*cell, surface_data.QPointXYZ(qp), static_cast<int>(f));
+    }
+  }
+
+  // The lengths are sums of at most a few terms of order one.
+  EXPECT_LT(worst_error, 1.0e-13);
+
+  std::size_t total_points = 0;
+  std::size_t total_face_points_on_hull = 0;
+  mpi_comm.all_reduce(num_points, total_points, mpi::op::sum<std::size_t>());
+  mpi_comm.all_reduce(
+    num_face_points_on_hull, total_face_points_on_hull, mpi::op::sum<std::size_t>());
+  // 512 cells with 264 volume points each. Along each axis a cell has one face that looks away
+  // from the source, or two when the source lies between its two faces, which is the case of one
+  // cell in eight: 512 (3 + 3 / 8) = 1728 faces of 24 points each.
+  EXPECT_EQ(total_points, 512U * 264U + 1728U * 24U);
+  EXPECT_GT(total_face_points_on_hull, 1000U);
 }
