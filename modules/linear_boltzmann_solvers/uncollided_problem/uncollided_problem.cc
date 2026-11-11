@@ -186,8 +186,9 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
 {
   LBSProblem::CheckConfigurationErrors(errors);
 
-  if (opensn::mpi_comm.size() != 1 and
-      not(ray_trace_all_cells_ and ray_tracer_type_ == RayTracerType::MATERIAL_HULL))
+  const bool supports_several_ranks =
+    ray_trace_all_cells_ and ray_tracer_type_ == RayTracerType::MATERIAL_HULL;
+  if (opensn::mpi_comm.size() != 1 and not supports_several_ranks)
     errors.emplace_back("uncollided flux generation must run with exactly one MPI rank, unless "
                         "every cell is ray traced with the material-hull ray tracer (method = "
                         "\"ray_trace\" and ray_tracer = \"material_hull\").");
@@ -2175,7 +2176,8 @@ UncollidedProblem::CorrectRayTracedCells(const SourcePoint& source_point,
                            leakage_fallback,
                            summary,
                            out_flow_);
-        std::copy(alpha.begin(), alpha.end(), all_alpha.begin() + idx * num_groups_);
+        for (size_t g = 0; g < num_groups_; ++g)
+          all_alpha[idx * num_groups_ + g] = alpha[g];
         ++num_corrected;
 
         for (size_t f = 0; f < cell_num_faces; ++f)
