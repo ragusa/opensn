@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "framework/mesh/raytrace/bvh_segment_tracer.h"
+#include "framework/utils/error.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -14,8 +15,6 @@ namespace opensn
 namespace
 {
 
-/// Largest number of triangles in a leaf.
-constexpr std::uint32_t max_leaf_size = 4;
 /// Number of bins of the surface-area heuristic.
 constexpr int num_bins = 16;
 
@@ -61,11 +60,107 @@ struct Box
   }
 };
 
+/**
+ * The convex hull of a box and a point, the apex: every segment from a point of the box to the
+ * apex lies in it. It is described, as in the shaft culling of Haines and Wallace (1991), by
+ * its bounding box and by the planes through the apex and the edges of the box that are on its
+ * outline seen from the apex. The description is conservative: Misses is true only for a box
+ * that the shaft does not touch, but may be false for such a box.
+ */
+struct Shaft
+{
+  /// Half-space n . x <= offset that holds the shaft, n of unit length.
+  struct Plane
+  {
+    double normal[3] = {0.0, 0.0, 0.0};
+    double offset = 0.0;
+  };
+
+  Shaft(const Vector3& box_lower, const Vector3& box_upper, const Vector3& apex, double tolerance)
+  {
+    const double box[2][3] = {{box_lower.x, box_lower.y, box_lower.z},
+                              {box_upper.x, box_upper.y, box_upper.z}};
+    const double point[3] = {apex.x, apex.y, apex.z};
+    // Which of the six faces of the box the apex is in front of.
+    bool visible[2][3];
+    for (int d = 0; d < 3; ++d)
+    {
+      lower[d] = std::min(box[0][d], point[d]) - tolerance;
+      upper[d] = std::max(box[1][d], point[d]) + tolerance;
+      visible[0][d] = point[d] < box[0][d];
+      visible[1][d] = point[d] > box[1][d];
+    }
+
+    // An edge of the box is on the outline when the apex is in front of one of its two faces
+    // only. The edge along axis c lies on side i of axis a and on side j of axis b.
+    for (int c = 0; c < 3; ++c)
+    {
+      const int a = (c + 1) % 3;
+      const int b = (c + 2) % 3;
+      for (int i = 0; i < 2; ++i)
+        for (int j = 0; j < 2; ++j)
+        {
+          if (visible[i][a] == visible[j][b])
+            continue;
+          // Normal of the plane through the apex and the edge: (p - apex) x (q - apex) with p
+          // and q the ends of the edge, which differ along c only.
+          const double p_a = box[i][a] - point[a];
+          const double p_b = box[j][b] - point[b];
+          const double length_c = box[1][c] - box[0][c];
+          double normal[3];
+          normal[a] = p_b * length_c;
+          normal[b] = -p_a * length_c;
+          normal[c] = 0.0;
+          const double norm = std::sqrt(normal[a] * normal[a] + normal[b] * normal[b]);
+          if (not(norm > 0.0))
+            continue;
+          // The box is on the inner side of the plane.
+          const double center_a = 0.5 * (box[0][a] + box[1][a]) - point[a];
+          const double center_b = 0.5 * (box[0][b] + box[1][b]) - point[b];
+          const double sign = (normal[a] * center_a + normal[b] * center_b) > 0.0 ? -1.0 : 1.0;
+          Plane& plane = planes[num_planes++];
+          for (int d = 0; d < 3; ++d)
+            plane.normal[d] = sign * normal[d] / norm;
+          plane.offset = plane.normal[0] * point[0] + plane.normal[1] * point[1] +
+                         plane.normal[2] * point[2] + tolerance;
+        }
+    }
+  }
+
+  /// True when the box [box_lower, box_upper] is outside the bounding box of the shaft or
+  /// entirely on the outer side of one of its planes.
+  bool Misses(const double* box_lower, const double* box_upper) const
+  {
+    for (int d = 0; d < 3; ++d)
+      if (box_lower[d] > upper[d] or box_upper[d] < lower[d])
+        return true;
+    for (int k = 0; k < num_planes; ++k)
+    {
+      const Plane& plane = planes[k];
+      double nearest = 0.0;
+      for (int d = 0; d < 3; ++d)
+        nearest += plane.normal[d] * (plane.normal[d] > 0.0 ? box_lower[d] : box_upper[d]);
+      if (nearest > plane.offset)
+        return true;
+    }
+    return false;
+  }
+
+  double lower[3] = {0.0, 0.0, 0.0};
+  double upper[3] = {0.0, 0.0, 0.0};
+  /// At most six edges of a box are on its outline.
+  Plane planes[6];
+  int num_planes = 0;
+};
+
 } // namespace
 
-BVHSegmentTracer::BVHSegmentTracer(std::shared_ptr<const MaterialHull> hull)
-  : SegmentTracer(std::move(hull))
+BVHSegmentTracer::BVHSegmentTracer(std::shared_ptr<const MaterialHull> hull,
+                                   const unsigned int max_leaf_size)
+  : SegmentTracer(std::move(hull)), max_leaf_size_(max_leaf_size)
 {
+  OpenSnInvalidArgumentIf(max_leaf_size_ == 0,
+                          "A leaf of a bounding volume hierarchy holds at least one triangle.");
   Build();
 }
 
@@ -97,6 +192,7 @@ BVHSegmentTracer::Build()
       centroids[t][d] = 0.5 * (triangle_boxes[t].lower[d] + triangle_boxes[t].upper[d]);
   }
   const double margin = 1.0e-9 * hull_->GetSize() + 1.0e-12 * max_coordinate;
+  margin_ = margin;
 
   // Ranges of triangle_ids_ still to be turned into a node: (node, first, count).
   struct Task
@@ -128,7 +224,7 @@ BVHSegmentTracer::Build()
     }
     nodes_[task.node].first = task.first;
     nodes_[task.node].count = task.count;
-    if (task.count <= max_leaf_size)
+    if (task.count <= max_leaf_size_)
       continue;
 
     // Split along the axis on which the triangle centroids are most spread out.
@@ -292,6 +388,60 @@ BVHSegmentTracer::Trace(const std::vector<HullSegment>& segments,
   counters.box_tests += box_tests;
   counters.triangle_tests += triangle_tests;
   counters.crossings += crossings.crossings.size();
+}
+
+void
+BVHSegmentTracer::CollectCandidates(const Vector3& lower,
+                                    const Vector3& upper,
+                                    const Vector3& apex,
+                                    const std::vector<std::uint32_t>& excluded_triangles,
+                                    std::vector<std::uint32_t>& candidates,
+                                    HullTraceCounters& counters) const
+{
+  candidates.clear();
+  ++counters.candidate_sets;
+  if (nodes_.empty())
+    return;
+
+  // The boxes of the hierarchy are padded by the margin already. The shaft is padded by as
+  // much again, which covers the round-off of its planes.
+  const Shaft shaft(lower, upper, apex, margin_);
+  const auto& triangles = hull_->GetTriangles();
+  std::uint64_t box_tests = 0;
+
+  thread_local std::vector<std::uint32_t> stack;
+  stack.assign(1, 0);
+  while (not stack.empty())
+  {
+    const Node& node = nodes_[stack.back()];
+    stack.pop_back();
+    ++box_tests;
+    if (shaft.Misses(node.lower, node.upper))
+      continue;
+
+    if (node.count == 0)
+    {
+      stack.push_back(node.first);
+      stack.push_back(node.first + 1);
+      continue;
+    }
+    for (std::uint32_t i = node.first; i < node.first + node.count; ++i)
+    {
+      const std::uint32_t triangle = triangle_ids_[i];
+      // The box of the triangle alone, which is smaller than that of its leaf.
+      Box box;
+      for (const auto& vertex : triangles[triangle].vertices)
+        box.Include(vertex);
+      if (shaft.Misses(box.lower.data(), box.upper.data()))
+        continue;
+      if (not excluded_triangles.empty() and
+          std::binary_search(excluded_triangles.begin(), excluded_triangles.end(), triangle))
+        continue;
+      candidates.push_back(triangle);
+    }
+  }
+  counters.candidate_box_tests += box_tests;
+  counters.candidate_triangles += candidates.size();
 }
 
 } // namespace opensn

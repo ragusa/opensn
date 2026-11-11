@@ -5,6 +5,7 @@
 #include "test/unit/framework/mesh/hull_test_utils.h"
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/mesh/raytrace/bvh_segment_tracer.h"
+#include "framework/mesh/raytrace/direction_grid_tracer.h"
 #include "framework/mesh/raytrace/material_hull.h"
 #include "framework/mesh/raytrace/raytracer.h"
 #include "framework/mesh/raytrace/segment_tracer.h"
@@ -688,6 +689,258 @@ TEST(SegmentTracerTest, CountersReportTheWorkDone)
   EXPECT_EQ(bvh.box_tests, 2 * once.box_tests);
   EXPECT_EQ(bvh.triangle_tests, 2 * once.triangle_tests);
   EXPECT_EQ(bvh.crossings, 2 * once.crossings);
+}
+
+namespace
+{
+
+/// End points of segments on the dogleg voxel model: inside a voxel, at a corner of the domain,
+/// on a boundary face, on a boundary edge, and inside the domain at 2e-7 from its boundary,
+/// which is closer than the distance below which a direction grid tests a triangle for every
+/// segment.
+std::vector<Vector3>
+DoglegApexes()
+{
+  return {Vector3(0.13, -0.42, 0.37),
+          Vector3(-1.0, -1.0, -1.0),
+          Vector3(-1.0, 0.2, 0.3),
+          Vector3(-1.0, -1.0, 0.3),
+          Vector3(-1.0 + 2.0e-7, 0.2, 0.3)};
+}
+
+/**
+ * Start points of segments that end at the apex, chosen to stress a search of the hull: random
+ * points, points on the planes of the voxel faces, points whose segment runs within a voxel
+ * face or through a vertex of the hull, and points at and around the apex.
+ */
+std::vector<Vector3>
+StartPointsFor(const Vector3& apex, const unsigned int seed)
+{
+  std::vector<Vector3> starts;
+  starts.reserve(3100);
+  RandomPoints random(Vector3(-1.2, -1.2, -1.2), Vector3(1.2, 1.2, 1.2), seed);
+  for (int n = 0; n < 1500; ++n)
+    starts.push_back(random());
+  for (int n = 0; n < 600; ++n)
+  {
+    // On a plane of voxel faces, and in the plane of voxel faces through the apex.
+    Vector3 on_plane = random();
+    Vector3 with_apex = random();
+    const double plane = -1.0 + 0.5 * (n % 5);
+    if (n % 3 == 0)
+    {
+      on_plane.x = plane;
+      with_apex.x = apex.x;
+    }
+    else if (n % 3 == 1)
+    {
+      on_plane.y = plane;
+      with_apex.y = apex.y;
+    }
+    else
+    {
+      on_plane.z = plane;
+      with_apex.z = apex.z;
+    }
+    starts.push_back(on_plane);
+    starts.push_back(with_apex);
+  }
+  // Through every vertex of the voxel grid, beyond it and up to it.
+  for (int k = 0; k <= 4; ++k)
+    for (int j = 0; j <= 4; ++j)
+      for (int i = 0; i <= 4; ++i)
+      {
+        const Vector3 vertex(-1.0 + 0.5 * i, -1.0 + 0.5 * j, -1.0 + 0.5 * k);
+        starts.push_back(apex + 1.7 * (vertex - apex));
+        starts.push_back(vertex);
+      }
+  // At the apex and at distances around those at which a direction grid changes its treatment.
+  starts.push_back(apex);
+  for (const double distance : {1.0e-14, 1.0e-9, 1.0e-6, 3.0e-6, 3.5e-6, 4.0e-6, 1.0e-3})
+    for (int n = 0; n < 20; ++n)
+    {
+      const Vector3 direction = random();
+      starts.push_back(apex + (distance / direction.Norm()) * direction);
+    }
+  return starts;
+}
+
+} // namespace
+
+TEST(SegmentTracerTest, CandidatesOfABoxGiveTheCrossingsOfTrace)
+{
+  const auto model = hull_test::MakeDoglegVoxelModel();
+  const auto hull = model.Hull(true);
+  const auto num_triangles = hull->GetTriangles().size();
+  const auto reference = SegmentTracer::Create("brute_force", hull);
+
+  // Boxes of start points: small and large, flat, around the apex and across the boundary.
+  struct StartBox
+  {
+    Vector3 lower, upper;
+  };
+  std::vector<StartBox> boxes = {{Vector3(0.6, 0.55, 0.7), Vector3(0.8, 0.9, 0.75)},
+                                 {Vector3(-0.9, 0.1, -0.3), Vector3(-0.2, 0.2, 0.6)},
+                                 {Vector3(0.5, -1.0, -1.0), Vector3(1.0, -0.5, -0.5)},
+                                 {Vector3(-0.25, -0.25, 0.5), Vector3(0.25, 0.25, 0.5)},
+                                 {Vector3(0.9, 0.9, 0.9), Vector3(1.3, 1.1, 1.2)},
+                                 {Vector3(-1.0, -1.0, -1.0), Vector3(1.0, 1.0, 1.0)}};
+  RandomPoints random_corner(Vector3(-1.0, -1.0, -1.0), Vector3(0.8, 0.8, 0.8), 5);
+  for (int n = 0; n < 20; ++n)
+  {
+    const Vector3 corner = random_corner();
+    boxes.push_back({corner, corner + Vector3(0.05 + 0.01 * n, 0.2, 0.02 * n)});
+  }
+
+  for (const auto* backend : backends)
+  {
+    const auto tracer = SegmentTracer::Create(backend, hull);
+    std::size_t num_candidates = 0;
+    std::size_t num_sets = 0;
+    HullTraceCounters counters;
+    for (const auto& apex : DoglegApexes())
+    {
+      const auto excluded = hull->FindTrianglesAt(apex);
+      std::vector<StartBox> apex_boxes = boxes;
+      apex_boxes.push_back({apex - Vector3(0.1, 0.2, 0.3), apex + Vector3(0.3, 0.1, 0.2)});
+      for (const auto& box : apex_boxes)
+      {
+        std::vector<std::uint32_t> candidates;
+        tracer->CollectCandidates(box.lower, box.upper, apex, excluded, candidates, counters);
+        num_candidates += candidates.size();
+        ++num_sets;
+        for (const auto triangle : candidates)
+          EXPECT_FALSE(std::binary_search(excluded.begin(), excluded.end(), triangle));
+
+        // Segments from the corners of the box and from points in it.
+        std::vector<HullSegment> segments;
+        segments.reserve(108);
+        for (int corner = 0; corner < 8; ++corner)
+          segments.push_back({Vector3((corner & 1) != 0 ? box.upper.x : box.lower.x,
+                                      (corner & 2) != 0 ? box.upper.y : box.lower.y,
+                                      (corner & 4) != 0 ? box.upper.z : box.lower.z),
+                              apex});
+        RandomPoints random(box.lower, box.upper, 17);
+        for (int n = 0; n < 100; ++n)
+          segments.push_back({random(), apex});
+
+        HullCrossings expected;
+        HullCrossings found;
+        reference->Trace(segments, excluded, expected);
+        tracer->TraceCandidates(segments, candidates, found, counters);
+        ASSERT_EQ(found.GetNumSegments(), segments.size());
+        for (std::size_t n = 0; n < segments.size(); ++n)
+          ExpectSameCrossings(std::vector<HullCrossing>(expected.Begin(n), expected.End(n)),
+                              std::vector<HullCrossing>(found.Begin(n), found.End(n)));
+      }
+    }
+    EXPECT_EQ(counters.candidate_sets, num_sets);
+    EXPECT_EQ(counters.candidate_triangles, num_candidates);
+    // The hierarchy leaves out most of the triangles; without it every triangle is a candidate.
+    if (std::string(backend) == "bvh")
+    {
+      EXPECT_LT(num_candidates, num_sets * num_triangles / 2);
+      EXPECT_GT(counters.candidate_box_tests, 0U);
+    }
+    else
+      EXPECT_GT(num_candidates, num_sets * (num_triangles - 12));
+  }
+}
+
+TEST(DirectionGridTracerTest, CrossingsAreThoseOfTheTracer)
+{
+  const auto model = hull_test::MakeDoglegVoxelModel();
+  const auto hull = model.Hull(true);
+  const std::shared_ptr<const SegmentTracer> reference = SegmentTracer::Create("brute_force", hull);
+  const std::shared_ptr<const SegmentTracer> tracer = SegmentTracer::Create("bvh", hull);
+
+  unsigned int seed = 100;
+  for (const auto& apex : DoglegApexes())
+  {
+    const auto excluded = hull->FindTrianglesAt(apex);
+    std::vector<HullSegment> segments;
+    for (const auto& start : StartPointsFor(apex, ++seed))
+    {
+      segments.push_back({start, apex});
+      // The end point as the uncollided problem computes it, which is the apex to round-off.
+      segments.push_back({start, start + 1.0 * (apex - start)});
+    }
+    HullCrossings expected;
+    HullTraceCounters reference_counters;
+    reference->Trace(segments, excluded, expected, reference_counters);
+
+    for (const unsigned int num_bins : {1U, 2U, 7U, 64U, 500U})
+    {
+      const DirectionGridTracer grid(tracer, apex, excluded, num_bins);
+      HullCrossings found;
+      HullTraceCounters counters;
+      grid.Trace(segments, found, counters);
+      ASSERT_EQ(found.GetNumSegments(), segments.size());
+      for (std::size_t n = 0; n < segments.size(); ++n)
+        ExpectSameCrossings(std::vector<HullCrossing>(expected.Begin(n), expected.End(n)),
+                            std::vector<HullCrossing>(found.Begin(n), found.End(n)));
+      EXPECT_EQ(counters.segments, segments.size());
+      EXPECT_EQ(counters.crossings, reference_counters.crossings);
+      // A triangle is tested when its rectangle holds the direction of the segment.
+      EXPECT_GE(counters.triangle_tests, counters.crossings);
+      EXPECT_GE(grid.GetNumEntries(), hull->GetTriangles().size() - excluded.size());
+      // Finer bins list fewer triangles each.
+      if (num_bins >= 64)
+        EXPECT_LT(counters.triangle_tests, reference_counters.triangle_tests / 20);
+    }
+  }
+}
+
+TEST(DirectionGridTracerTest, OtherSegmentsAreTracedByTheTracer)
+{
+  const auto model = hull_test::MakeDoglegVoxelModel();
+  const auto hull = model.Hull(true);
+  const std::shared_ptr<const SegmentTracer> tracer = SegmentTracer::Create("bvh", hull);
+  const Vector3 apex(-1.0, -1.0, -1.0);
+  const auto excluded = hull->FindTrianglesAt(apex);
+  const DirectionGridTracer grid(tracer, apex, excluded, 16);
+  EXPECT_EQ(grid.GetApex().x, apex.x);
+  EXPECT_GT(grid.GetMaxBinSize(), 0U);
+
+  // Segments that end elsewhere, mixed with segments that end at the apex and with a segment of
+  // zero length.
+  RandomPoints random(Vector3(-1.1, -1.1, -1.1), Vector3(1.1, 1.1, 1.1), 23);
+  std::vector<HullSegment> segments;
+  for (int n = 0; n < 300; ++n)
+  {
+    segments.push_back({random(), random()});
+    segments.push_back({random(), apex});
+    segments.push_back({random(), apex + Vector3(1.0e-9, 0.0, 0.0)});
+  }
+  segments.push_back({Vector3(0.1, 0.2, 0.3), Vector3(0.1, 0.2, 0.3)});
+
+  HullCrossings expected;
+  HullCrossings found;
+  HullTraceCounters counters;
+  tracer->Trace(segments, excluded, expected);
+  grid.Trace(segments, found, counters);
+  ASSERT_EQ(found.GetNumSegments(), segments.size());
+  for (std::size_t n = 0; n < segments.size(); ++n)
+    ExpectSameCrossings(std::vector<HullCrossing>(expected.Begin(n), expected.End(n)),
+                        std::vector<HullCrossing>(found.Begin(n), found.End(n)));
+  EXPECT_EQ(counters.segments, segments.size());
+  EXPECT_EQ(counters.crossings, expected.crossings.size());
+  // The segments that end elsewhere searched the hierarchy, which the others do not: they
+  // test fewer rectangles than there are entries in the grid.
+  HullTraceCounters apex_counters;
+  std::vector<HullSegment> apex_segments;
+  for (std::size_t n = 1; n < segments.size(); n += 3)
+    apex_segments.push_back(segments[n]);
+  grid.Trace(apex_segments, found, apex_counters);
+  EXPECT_LE(apex_counters.box_tests, apex_segments.size() * grid.GetMaxBinSize());
+  EXPECT_GT(counters.box_tests, apex_counters.box_tests + 600);
+
+  grid.Trace({}, found, counters);
+  EXPECT_EQ(found.GetNumSegments(), 0U);
+
+  EXPECT_THROW(DirectionGridTracer(nullptr, apex, excluded, 16), std::invalid_argument);
+  EXPECT_THROW(DirectionGridTracer(tracer, apex, excluded, 0), std::invalid_argument);
+  EXPECT_THROW(DirectionGridTracer(tracer, apex, excluded, 5000), std::invalid_argument);
 }
 
 TEST(SegmentTracerTest, MeshHullMatchesVoxelReference)

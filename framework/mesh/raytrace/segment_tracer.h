@@ -60,12 +60,19 @@ struct HullTraceCounters
 {
   /// Segments traced.
   std::uint64_t segments = 0;
-  /// Tests of a segment against a box of the hierarchy.
+  /// Tests of a segment against a bound of triangles: a box of a hierarchy, or the rectangle
+  /// of a triangle in a direction grid.
   std::uint64_t box_tests = 0;
   /// Tests of a segment against a triangle.
   std::uint64_t triangle_tests = 0;
   /// Crossings found, the excluded triangles left out.
   std::uint64_t crossings = 0;
+  /// Candidate sets collected with CollectCandidates.
+  std::uint64_t candidate_sets = 0;
+  /// Tests of a box of the hierarchy while the candidate sets were collected.
+  std::uint64_t candidate_box_tests = 0;
+  /// Triangles in the candidate sets.
+  std::uint64_t candidate_triangles = 0;
 
   HullTraceCounters& operator+=(const HullTraceCounters& other)
   {
@@ -73,6 +80,9 @@ struct HullTraceCounters
     box_tests += other.box_tests;
     triangle_tests += other.triangle_tests;
     crossings += other.crossings;
+    candidate_sets += other.candidate_sets;
+    candidate_box_tests += other.candidate_box_tests;
+    candidate_triangles += other.candidate_triangles;
     return *this;
   }
 };
@@ -157,6 +167,33 @@ public:
     Trace(segments, excluded_triangles, crossings, counters);
   }
 
+  /**
+   * Collects the triangles that a segment from a point of the box [lower, upper] to the point
+   * apex can cross, the excluded triangles left out. The set may hold triangles that no such
+   * segment crosses, but misses none that Trace would report. The output is overwritten.
+   *
+   * This is for groups of segments that share their end point and start close to one another,
+   * such as the paths from the quadrature points of a cell to a point source: the hull is
+   * searched once for the group, and TraceCandidates then tests each segment against the set.
+   * The default implementation returns every triangle.
+   */
+  virtual void CollectCandidates(const Vector3& lower,
+                                 const Vector3& upper,
+                                 const Vector3& apex,
+                                 const std::vector<std::uint32_t>& excluded_triangles,
+                                 std::vector<std::uint32_t>& candidates,
+                                 HullTraceCounters& counters) const;
+
+  /**
+   * Finds every crossing of each segment with the candidate triangles. With the candidates of
+   * a box and an apex, the crossings are those that Trace reports for segments that start in
+   * the box and end at the apex. The output is overwritten.
+   */
+  void TraceCandidates(const std::vector<HullSegment>& segments,
+                       const std::vector<std::uint32_t>& candidates,
+                       HullCrossings& crossings,
+                       HullTraceCounters& counters) const;
+
   /// Marks a segment whose crossings are not consistent in TraceLengths.
   static constexpr std::uint32_t INVALID_MATERIAL = std::numeric_limits<std::uint32_t>::max();
 
@@ -179,13 +216,15 @@ public:
 
   /**
    * Creates a tracer. backend is "bvh" (bounding volume hierarchy) or "brute_force" (every
-   * triangle is tested, for verification).
+   * triangle is tested, for verification). bvh_leaf_size is the largest number of triangles in
+   * a leaf of the hierarchy; zero selects the default of BVHSegmentTracer.
    */
   static std::unique_ptr<SegmentTracer> Create(const std::string& backend,
-                                               std::shared_ptr<const MaterialHull> hull);
+                                               std::shared_ptr<const MaterialHull> hull,
+                                               unsigned int bvh_leaf_size = 0);
 
-protected:
-  /// Tests one triangle and appends the crossing, if any, to crossings.
+  /// Tests one triangle and appends the crossing, if any, to crossings. A triangle listed in
+  /// excluded_triangles, which must be sorted, is not appended.
   void TestTriangle(const HullSegmentFrame& frame,
                     std::uint32_t triangle,
                     const std::vector<std::uint32_t>& excluded_triangles,
@@ -194,6 +233,7 @@ protected:
   /// Sorts the crossings from first on by fraction and then by triangle.
   static void SortCrossings(std::vector<HullCrossing>& crossings, std::size_t first);
 
+protected:
   const std::shared_ptr<const MaterialHull> hull_;
 };
 

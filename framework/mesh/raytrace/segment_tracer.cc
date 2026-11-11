@@ -181,6 +181,47 @@ SegmentTracer::SortCrossings(std::vector<HullCrossing>& crossings, const std::si
 }
 
 void
+SegmentTracer::CollectCandidates(const Vector3& /*lower*/,
+                                 const Vector3& /*upper*/,
+                                 const Vector3& /*apex*/,
+                                 const std::vector<std::uint32_t>& excluded_triangles,
+                                 std::vector<std::uint32_t>& candidates,
+                                 HullTraceCounters& counters) const
+{
+  const auto num_triangles = static_cast<std::uint32_t>(hull_->GetTriangles().size());
+  candidates.clear();
+  for (std::uint32_t triangle = 0; triangle < num_triangles; ++triangle)
+    if (not std::binary_search(excluded_triangles.begin(), excluded_triangles.end(), triangle))
+      candidates.push_back(triangle);
+  ++counters.candidate_sets;
+  counters.candidate_triangles += candidates.size();
+}
+
+void
+SegmentTracer::TraceCandidates(const std::vector<HullSegment>& segments,
+                               const std::vector<std::uint32_t>& candidates,
+                               HullCrossings& crossings,
+                               HullTraceCounters& counters) const
+{
+  static const std::vector<std::uint32_t> no_excluded_triangles;
+
+  crossings.crossings.clear();
+  crossings.offsets.assign(1, 0);
+  for (const auto& segment : segments)
+  {
+    const HullSegmentFrame frame(segment);
+    const std::size_t first = crossings.crossings.size();
+    for (const auto triangle : candidates)
+      TestTriangle(frame, triangle, no_excluded_triangles, crossings.crossings);
+    SortCrossings(crossings.crossings, first);
+    crossings.offsets.push_back(crossings.crossings.size());
+  }
+  counters.segments += segments.size();
+  counters.triangle_tests += segments.size() * candidates.size();
+  counters.crossings += crossings.crossings.size();
+}
+
+void
 SegmentTracer::TraceLengths(const std::vector<HullSegment>& segments,
                             const std::vector<std::uint32_t>& excluded_triangles,
                             const std::uint32_t end_material,
@@ -205,10 +246,13 @@ SegmentTracer::TraceLengths(const std::vector<HullSegment>& segments,
 }
 
 std::unique_ptr<SegmentTracer>
-SegmentTracer::Create(const std::string& backend, std::shared_ptr<const MaterialHull> hull)
+SegmentTracer::Create(const std::string& backend,
+                      std::shared_ptr<const MaterialHull> hull,
+                      const unsigned int bvh_leaf_size)
 {
   if (backend == "bvh")
-    return std::make_unique<BVHSegmentTracer>(std::move(hull));
+    return std::make_unique<BVHSegmentTracer>(
+      std::move(hull), bvh_leaf_size > 0 ? bvh_leaf_size : BVHSegmentTracer::default_max_leaf_size);
   if (backend == "brute_force")
     return std::make_unique<BruteForceSegmentTracer>(std::move(hull));
   OpenSnInvalidArgument("Unknown segment tracer backend \"" + backend +
