@@ -604,6 +604,18 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedVoidLayersDiagnosticsWritten=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
       }
     ]
   },
@@ -627,6 +639,18 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedVoidLayersDiagnosticsWritten=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
       }
     ]
   },
@@ -712,6 +736,12 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },
@@ -741,6 +771,12 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },
@@ -768,6 +804,12 @@
       {
         "type": "KeyValuePair",
         "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
       }
@@ -805,6 +847,12 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },
@@ -838,6 +886,12 @@
       {
         "type": "KeyValuePair",
         "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
       }
@@ -875,6 +929,12 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },
@@ -902,6 +962,12 @@
       {
         "type": "KeyValuePair",
         "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
       }
@@ -933,6 +999,12 @@
         "key": "Conservation error          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },
@@ -960,6 +1032,12 @@
       {
         "type": "KeyValuePair",
         "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
       }
@@ -1059,6 +1137,12 @@
       {
         "type": "KeyValuePair",
         "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
         "goldvalue": 0.0,
         "abs_tol": 1e-12
       }

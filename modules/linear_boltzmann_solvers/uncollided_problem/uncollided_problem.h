@@ -44,7 +44,14 @@ public:
   /// reflecting planes, and compute and write the uncollided flux moments.
   void BuildSourcePoints();
   void AddReflectedSourcePoints();
-  void Execute(const std::string& file_name, unsigned int progress_interval);
+  /// @p diagnostics_file_name, when not empty, names a second HDF5 file that receives, for each
+  /// physical source s, the global ids of the ray-traced cells ("cell ids s"), their scale
+  /// factors and relative balance residuals after the conservation correction ("alpha s" and
+  /// "balance residual s", indexed [cell * num_groups + group] in the order of the cell ids),
+  /// and the same residuals for the swept cells ("bulk cell ids s", "bulk balance residual s").
+  void Execute(const std::string& file_name,
+               unsigned int progress_interval,
+               const std::string& diagnostics_file_name = "");
 
 protected:
   /// Factory-only constructor.
@@ -153,7 +160,61 @@ protected:
     double original_outgoing_sum = 0.0;
     double outgoing_change_sum = 0.0;
     double max_relative_outgoing_change = 0.0;
+
+    /// Number of cells corrected.
+    size_t num_cells = 0;
+    /// Smallest and largest scale factor over the cells and groups.
+    double min_alpha = std::numeric_limits<double>::max();
+    double max_alpha = 0.0;
+    /// Upper bounds of the bands of |alpha - 1| in which the cell-group pairs are counted. A
+    /// factor far from one marks a cell whose flux the quadratures do not resolve, such as a cell
+    /// cut by the shadow of a material edge.
+    static constexpr std::array<double, 4> alpha_bands = {1.0e-3, 1.0e-2, 1.0e-1, 0.5};
+    /// Number of cell-group pairs in each band; the last entry counts the pairs above all bands.
+    std::array<size_t, 5> alpha_histogram = {0, 0, 0, 0, 0};
+    /// Number of cell-group pairs whose outgoing faces share the source equally.
+    size_t leakage_fallback_count = 0;
+    /// Largest |inflow + source - outflow - removal| after the correction, relative to
+    /// inflow + source.
+    double max_balance_residual = 0.0;
+    /// The pair with the largest |alpha - 1|.
+    double largest_change = 0.0;
+    std::uint64_t largest_change_cell = 0;
+    size_t largest_change_group = 0;
+    double largest_change_alpha = 1.0;
+    /// When set, the global id of every cell and the scale factor and relative balance residual
+    /// of every cell and group are kept, in the order in which the cells are corrected.
+    bool keep_cells = false;
+    std::vector<std::uint64_t> cell_ids;
+    std::vector<double> cell_alphas;
+    std::vector<double> cell_residuals;
   };
+
+  /// Per-cell results of one physical source for the diagnostics file.
+  struct SourceDiagnostics
+  {
+    std::vector<std::uint64_t> cell_ids;
+    std::vector<double> alphas;
+    std::vector<double> residuals;
+    std::vector<std::uint64_t> bulk_cell_ids;
+    std::vector<double> bulk_residuals;
+  };
+
+  /// Wall time of rank 0 in each phase of Execute, in seconds.
+  struct PhaseTimings
+  {
+    double material_hull = 0.0;
+    double sweep_ordering = 0.0;
+    double ray_tracing = 0.0;
+    double conservation = 0.0;
+    double bulk_sweep = 0.0;
+    double image_sources = 0.0;
+    double moments = 0.0;
+    double output = 0.0;
+  };
+
+  /// Writes the diagnostics file from rank 0. Collective.
+  void WriteDiagnostics(const std::string& file_name) const;
 
   /**
    * Conservation correction of one ray-traced cell, Eqs. (24)-(25) of Woodsford et al. (2026).
@@ -460,6 +521,11 @@ protected:
   /// This remains for meshes with non-convex cells or faces of more than
   /// FaceVertData::max_sides vertices.
   std::atomic<size_t> cell_walk_nudged_paths_ = 0;
+
+  PhaseTimings timings_;
+  /// True while Execute collects the data of the diagnostics file.
+  bool write_diagnostics_ = false;
+  std::vector<SourceDiagnostics> source_diagnostics_;
 
   unsigned int ell_max_ = 0;
   /// Integrate the leakages and volume integrals of the cells that share a vertex with a point

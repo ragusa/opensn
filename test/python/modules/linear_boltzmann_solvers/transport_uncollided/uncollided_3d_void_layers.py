@@ -13,8 +13,10 @@ S exp(-tau) / (4 pi r^2), evaluated here independently of the mesh.
 The conservation correction of a ray-traced cell scales its flux and its outgoing leakage by
 (inflow + source) / (outflow + sigma_t * integral of the flux). In a void this is
 inflow / outflow, which is well defined, so the balance must close in every cell. The test
-checks the flux against the point kernel in every layer, and tests.json checks the global
-balance that the solver reports, production = removal + outflow, to round-off.
+checks the flux against the point kernel in every layer. tests.json checks, to round-off, the
+global balance that the solver reports, production = removal + outflow, and the largest balance
+residual it reports over the cells, which include the void and near-void cells. The test also
+asks for the diagnostics file, which holds the scale factor and the residual of every cell.
 """
 
 import importlib
@@ -79,7 +81,9 @@ if __name__ == "__main__":
         xs_map.append({"block_ids": [block_id], "xs": xs})
 
     file_name = "uncollided_3d_void_layers.h5"
+    diagnostics_file_name = "uncollided_3d_void_layers_diagnostics.h5"
     remove_file(file_name)
+    remove_file(diagnostics_file_name)
     problem = UncollidedProblem(
         mesh=grid,
         num_groups=1,
@@ -93,7 +97,9 @@ if __name__ == "__main__":
         scattering_order=0,
         ray_tracer=ray_tracer,
     )
-    solver = UncollidedSolver(problem=problem, file_name=file_name)
+    solver = UncollidedSolver(
+        problem=problem, file_name=file_name, diagnostics_file=diagnostics_file_name
+    )
     solver.Initialize()
     solver.Execute()
 
@@ -116,8 +122,13 @@ if __name__ == "__main__":
 
     if rank == 0:
         print(f"UncollidedVoidLayersMaxRelativeError={max_error:.8e}")
+        diagnostics_written = (
+            os.path.exists(diagnostics_file_name) and os.path.getsize(diagnostics_file_name) > 0
+        )
+        print(f"UncollidedVoidLayersDiagnosticsWritten={int(diagnostics_written)}")
         sys.stdout.flush()
 
     remove_file(file_name)
+    remove_file(diagnostics_file_name)
     if max_error > 0.05:
         raise RuntimeError(f"Void-layer scalar-flux error is too large: {max_error}")

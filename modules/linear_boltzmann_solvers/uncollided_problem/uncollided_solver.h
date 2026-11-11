@@ -26,6 +26,7 @@ protected:
 
   std::shared_ptr<UncollidedProblem> problem_;
   std::string file_name_;
+  std::string diagnostics_file_name_;
   unsigned int progress_interval_ = 5;
 
 public:

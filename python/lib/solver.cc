@@ -1999,13 +1999,34 @@ WrapUncollidedSolver(py::module& slv)
         completed source points, elapsed time, and estimated remaining time.
         Set to zero to disable progress reporting. Valid values are integers in
         ``[0, 100]``.
+    diagnostics_file : str, default=''
+        Name of a second HDF5 file with per-cell results of the conservation
+        correction, written when not empty. For each physical source ``s``, in
+        the order of ``point_sources``, it holds the global ids of the
+        ray-traced cells (``cell ids s``), their scale factors (``alpha s``)
+        and the relative residuals of their balance after the correction
+        (``balance residual s``), both indexed ``[cell * num_groups + group]``
+        in the order of the cell ids, and the relative balance residuals of the
+        swept cells (``bulk cell ids s``, ``bulk balance residual s``). The
+        attributes ``num groups`` and ``num sources`` give the sizes.
 
     Notes
     -----
-    :meth:`Initialize` requires exactly one MPI rank. The generated HDF5 file
-    may then be reused by a serial or parallel collided calculation on the
-    same mesh. :meth:`Execute` uses the problem's point sources as they are when
-    it runs, including sources replaced after :meth:`Initialize`.
+    :meth:`Initialize` requires exactly one MPI rank, unless the problem ray
+    traces every cell with the material-hull ray tracer
+    (``method='ray_trace'``, ``ray_tracer='material_hull'``), which runs on
+    any number of ranks. The generated HDF5 file does not depend on the
+    partitioning and may be reused by a serial or parallel collided
+    calculation on the same mesh. :meth:`Execute` uses the problem's point
+    sources as they are when it runs, including sources replaced after
+    :meth:`Initialize`.
+
+    :meth:`Execute` reports, for each source, the smallest and largest scale
+    factor of the conservation correction, the number of cell-group pairs by
+    the size of the correction, and the largest balance residual left in a
+    cell. A scale factor far from one marks a cell whose flux the spatial
+    quadratures do not resolve, such as a cell cut by the shadow of a material
+    edge. It ends with the wall time of each phase.
 
     Internal threading in the current uncollided implementation is capped by
     the ``OPENSN_NUM_THREADS`` environment variable and defaults to ``1`` when

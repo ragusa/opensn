@@ -741,7 +741,9 @@ UncollidedProblem::BuildSweepOrdering(const SourcePoint& source_point)
 // chain. The suppression must cover Execute() because the analyzer anchors the
 // diagnostic to the first note it emits in user code, which is here.
 void
-UncollidedProblem::Execute(const std::string& file_name, const unsigned int progress_interval)
+UncollidedProblem::Execute(const std::string& file_name,
+                           const unsigned int progress_interval,
+                           const std::string& diagnostics_file_name)
 {
   CALI_CXX_MARK_SCOPE("GenerateUncollidedFlux");
 
@@ -753,8 +755,13 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
 
   cell_walk_nudged_paths_ = 0;
   cell_walk_edge_paths_ = 0;
+  timings_ = PhaseTimings();
+  write_diagnostics_ = not diagnostics_file_name.empty();
+  source_diagnostics_.clear();
+  Timer phase_timer;
   if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
     BuildMaterialHull();
+  timings_.material_hull = phase_timer.GetTime() / 1000.0;
 
   // Create h5 file. Rank 0 writes it, with the data of the other ranks gathered there.
   std::optional<H5FileHandle> file_handle;
@@ -881,11 +888,15 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
 
     // Initialize uncollided flux and moment vector
     destination_phi_.assign(num_loc_unknowns, 0.);
+    phase_timer.Reset();
     BuildSweepOrdering(source_point);
+    timings_.sweep_ordering += phase_timer.GetTime() / 1000.0;
 
     RaytraceNearSourceRegion(source_point);
+    phase_timer.Reset();
     if (not bulk_spls_.empty())
       SweepBulkRegion(source_point);
+    timings_.bulk_sweep += phase_timer.GetTime() / 1000.0;
 
     // Update phi_new_local_
     for (const auto& cell : grid_->GetLocalCells())
@@ -903,9 +914,11 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
         }
       }
     }
+    phase_timer.Reset();
     UpdateBalance(source_point);
 
     AccumulateMoments(pt_loc);
+    timings_.moments += phase_timer.GetTime() / 1000.0;
 
     if (progress_interval > 0)
     {
@@ -929,8 +942,10 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
     }
   }
 
+  phase_timer.Reset();
   if (not reflected_source_points_.empty())
     ProjectReflectedImageSources(progress_interval);
+  timings_.image_sources = phase_timer.GetTime() / 1000.0;
 
   if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
     log.Log() << "Material-hull ray tracing: " << hull_retraced_segments_.load()
@@ -946,10 +961,26 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
                            "from a displaced point. Their optical depth is approximate.";
   }
 
+  phase_timer.Reset();
   WriteFluxMoments(file);
 
   // Finalize balance calculation
   FinalizeBalance(file);
+  if (write_diagnostics_)
+    WriteDiagnostics(diagnostics_file_name);
+  timings_.output = phase_timer.GetTime() / 1000.0;
+
+  // Wall time of rank 0 in each phase. The phases are collective, so the other ranks spend
+  // about the same time in them, part of it waiting.
+  log.Log() << std::fixed << std::setprecision(3) << "Uncollided generation time by phase (s):\n"
+            << " Material hull            = " << timings_.material_hull << "\n"
+            << " Cell ordering            = " << timings_.sweep_ordering << "\n"
+            << " Ray tracing              = " << timings_.ray_tracing << "\n"
+            << " Conservation correction  = " << timings_.conservation << "\n"
+            << " Bulk sweep               = " << timings_.bulk_sweep << "\n"
+            << " Image sources            = " << timings_.image_sources << "\n"
+            << " Balance and moments      = " << timings_.moments << "\n"
+            << " Output                   = " << timings_.output << "\n";
 }
 // NOLINTEND(clang-analyzer-security.ArrayBound)
 
@@ -1842,7 +1873,42 @@ UncollidedProblem::CorrectCellBalance(const std::uint64_t cell_global_id,
     for (size_t f = 0; f < cell_num_faces; ++f)
       if (vacuum_boundary_faces[f] and orientations[f] == FOOUTGOING)
         out_flow += leakage[f][g];
+
+    // What is left of the cell balance after the correction, relative to what enters the cell.
+    double corrected_outflow = 0.0;
+    for (size_t f = 0; f < cell_num_faces; ++f)
+      if (orientations[f] == FOOUTGOING)
+        corrected_outflow += leakage[f][g];
+    const double residual =
+      source[g] - corrected_outflow - alpha[g] * sigma_t[g] * projected_integral[g];
+    const double relative_residual = source[g] > 0.0 ? std::abs(residual) / source[g] : 0.0;
+
+    summary.min_alpha = std::min(summary.min_alpha, alpha[g]);
+    summary.max_alpha = std::max(summary.max_alpha, alpha[g]);
+    size_t band = 0;
+    while (band < ConservationSummary::alpha_bands.size() and
+           relative_change >= ConservationSummary::alpha_bands[band])
+      ++band;
+    ++summary.alpha_histogram[band];
+    if (use_leakage_fallback)
+      ++summary.leakage_fallback_count;
+    summary.max_balance_residual = std::max(summary.max_balance_residual, relative_residual);
+    if (relative_change > summary.largest_change)
+    {
+      summary.largest_change = relative_change;
+      summary.largest_change_cell = cell_global_id;
+      summary.largest_change_group = g;
+      summary.largest_change_alpha = alpha[g];
+    }
+    if (summary.keep_cells)
+    {
+      summary.cell_alphas.push_back(alpha[g]);
+      summary.cell_residuals.push_back(relative_residual);
+    }
   }
+  ++summary.num_cells;
+  if (summary.keep_cells)
+    summary.cell_ids.push_back(cell_global_id);
 
   if (cell_current_mismatched)
     ++summary.mismatched_cell_count;
@@ -2350,6 +2416,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   constexpr auto FOOUTGOING = FaceOrientation::OUTGOING;
 
   ConservationSummary summary;
+  summary.keep_cells = write_diagnostics_;
 
   // Total fraction of the source emitted into the source cells.
   double source_angle_fraction = 0.0;
@@ -2390,6 +2457,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
     }
   }
 
+  Timer phase_timer;
   // Trace every near-source cell. The ray-traced data of a cell does not depend on the other
   // cells, so the cells are shared among the threads; each thread writes to the cells it takes.
   const size_t num_near_cells = near_spls_.size();
@@ -2434,6 +2502,9 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
     if (worker_exception)
       std::rethrow_exception(worker_exception);
   }
+
+  timings_.ray_tracing += phase_timer.GetTime() / 1000.0;
+  phase_timer.Reset();
 
   // Number of cells ray traced, over all ranks.
   size_t num_traced_cells = num_near_cells;
@@ -2580,6 +2651,8 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   // A source on the domain boundary emits part of its strength directly out of the domain.
   // Reflecting setups reject sources on faces, so this part always leaves through a
   // non-reflecting boundary.
+  timings_.conservation += phase_timer.GetTime() / 1000.0;
+
   // Rank 0 holds the fraction emitted into the cells of all ranks.
   const double escaped_fraction = std::max(0.0, 1.0 - source_angle_fraction);
   if (opensn::mpi_comm.rank() == 0)
@@ -2620,6 +2693,42 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
                      << "\n"
                      << " NearSourceCurrentAggregateRelativeMismatch=" << aggregate_relative_change
                      << "\n";
+
+  if (summary.num_cells > 0)
+  {
+    std::ostringstream report;
+    report << std::setprecision(6) << std::scientific << "Conservation correction of "
+           << summary.num_cells << " cells in " << num_groups_ << " groups:\n"
+           << " Smallest scale factor alpha            = " << summary.min_alpha << "\n"
+           << " Largest scale factor alpha             = " << summary.max_alpha << "\n"
+           << " Cell-group pairs by |alpha - 1|        :";
+    for (size_t band = 0; band < summary.alpha_histogram.size(); ++band)
+    {
+      if (band < ConservationSummary::alpha_bands.size())
+        report << " below " << std::setprecision(0) << ConservationSummary::alpha_bands[band]
+               << ": ";
+      else
+        report << " above: ";
+      report << summary.alpha_histogram[band]
+             << (band + 1 < summary.alpha_histogram.size() ? "," : "");
+    }
+    report << std::setprecision(6) << "\n"
+           << " Pairs whose outgoing faces share source = " << summary.leakage_fallback_count
+           << "\n"
+           << " Largest cell balance residual          = " << summary.max_balance_residual << "\n";
+    if (summary.largest_change > 0.1)
+      report << " Largest correction                     : cell " << summary.largest_change_cell
+             << ", group " << summary.largest_change_group
+             << ", alpha = " << summary.largest_change_alpha << "\n";
+    log.Log() << report.str();
+  }
+  if (write_diagnostics_ and opensn::mpi_comm.rank() == 0)
+  {
+    auto& diagnostics = source_diagnostics_.emplace_back();
+    diagnostics.cell_ids = std::move(summary.cell_ids);
+    diagnostics.alphas = std::move(summary.cell_alphas);
+    diagnostics.residuals = std::move(summary.cell_residuals);
+  }
 
   constexpr double aggregate_current_change_warning = 0.5;
   if (aggregate_relative_change > aggregate_current_change_warning)
@@ -2977,11 +3086,15 @@ UncollidedProblem::SweepBulkRegion(const SourcePoint& source_point)
     log.Log() << "Bulk sweep will process " << num_groups_ << " groups over " << num_group_threads
               << " threads.";
 
+  // Relative balance residual of each bulk cell and group, for the diagnostics file.
+  std::vector<double> bulk_residuals(write_diagnostics_ ? bulk_spls_.size() * num_groups_ : 0);
+
   auto SweepGroups = [&](const size_t thread_id)
   {
     // Sweep bulk region cells
-    for (size_t c : bulk_spls_)
+    for (size_t bulk_index = 0; bulk_index < bulk_spls_.size(); ++bulk_index)
     {
+      const size_t c = bulk_spls_[bulk_index];
       const Cell& cell = grid_->GetLocalCell(c);
 
       // Cell data
@@ -3112,6 +3225,7 @@ UncollidedProblem::SweepBulkRegion(const SourcePoint& source_point)
             Atemp(i, j) = Amat(i, j) + sigma_t[g] * mass_matrix(i, j);
 
         // Solve system
+        const Vector<double> rhs = phi;
         GaussElimination(Atemp, phi, static_cast<int>(cell_num_nodes));
 
         // Update flux solution
@@ -3119,6 +3233,23 @@ UncollidedProblem::SweepBulkRegion(const SourcePoint& source_point)
         {
           const auto ir = sdm.MapDOFLocal(cell, i);
           destination_phi_[ir * num_groups_ + g] = phi(i);
+        }
+
+        if (write_diagnostics_)
+        {
+          // The basis functions sum to one, so the equations of the cell sum to its balance:
+          // inflow = outflow + removal. Report what is left of it, relative to the inflow.
+          double inflow = 0.0;
+          double residual = 0.0;
+          for (size_t i = 0; i < cell_num_nodes; ++i)
+          {
+            inflow += rhs(i);
+            residual += rhs(i);
+            for (size_t j = 0; j < cell_num_nodes; ++j)
+              residual -= (Amat(i, j) + sigma_t[g] * mass_matrix(i, j)) * phi(j);
+          }
+          bulk_residuals[bulk_index * num_groups_ + g] =
+            inflow != 0.0 ? std::abs(residual / inflow) : 0.0;
         }
       }
     }
@@ -3152,6 +3283,47 @@ UncollidedProblem::SweepBulkRegion(const SourcePoint& source_point)
     worker.join();
   if (worker_exception)
     std::rethrow_exception(worker_exception);
+
+  if (write_diagnostics_)
+  {
+    // RaytraceNearSourceRegion has added the entry of this source.
+    auto& diagnostics = source_diagnostics_.back();
+    for (const size_t c : bulk_spls_)
+      diagnostics.bulk_cell_ids.push_back(grid_->GetLocalCell(c).global_id);
+    diagnostics.bulk_residuals = std::move(bulk_residuals);
+  }
+}
+
+void
+UncollidedProblem::WriteDiagnostics(const std::string& file_name) const
+{
+  RunOnRoot(
+    [this, &file_name]()
+    {
+      const auto raw_file = H5Fcreate(file_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+      OpenSnInvalidArgumentIf(raw_file < 0,
+                              GetName() + ": failed to create uncollided diagnostics file \"" +
+                                file_name + "\".");
+      const H5FileHandle file_handle(raw_file);
+      const auto file = file_handle.Id();
+
+      bool written = H5CreateAttribute<unsigned int>(file, "num groups", num_groups_) and
+                     H5CreateAttribute<uint64_t>(file, "num sources", source_diagnostics_.size());
+      for (size_t source = 0; source < source_diagnostics_.size() and written; ++source)
+      {
+        const auto& diagnostics = source_diagnostics_[source];
+        const std::string suffix = " " + std::to_string(source);
+        written =
+          H5WriteDataset1D<uint64_t>(file, "cell ids" + suffix, diagnostics.cell_ids) and
+          H5WriteDataset1D<double>(file, "alpha" + suffix, diagnostics.alphas) and
+          H5WriteDataset1D<double>(file, "balance residual" + suffix, diagnostics.residuals) and
+          H5WriteDataset1D<uint64_t>(file, "bulk cell ids" + suffix, diagnostics.bulk_cell_ids) and
+          H5WriteDataset1D<double>(
+            file, "bulk balance residual" + suffix, diagnostics.bulk_residuals);
+      }
+      OpenSnLogicalErrorIf(not written,
+                           GetName() + ": failed to write the uncollided diagnostics file.");
+    });
 }
 
 UncollidedMatrices

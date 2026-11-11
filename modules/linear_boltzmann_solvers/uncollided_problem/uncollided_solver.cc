@@ -27,6 +27,11 @@ UncollidedSolver::GetInputParameters()
     "progress_interval",
     5,
     "Percentage interval for source-point progress reports. Set to zero to disable reporting.");
+  params.AddOptionalParameter(
+    "diagnostics_file",
+    "",
+    "Name of an HDF5 file that receives the scale factor and the balance residual of every cell "
+    "after the conservation correction. Not written when empty.");
   params.ConstrainParameterRange("progress_interval", AllowableRangeLowLimit::New(0));
   params.ConstrainParameterRange("progress_interval", AllowableRangeHighLimit::New(100));
 
@@ -43,6 +48,7 @@ UncollidedSolver::UncollidedSolver(const InputParameters& params)
   : Solver(params),
     problem_(params.GetSharedPtrParam<Problem, UncollidedProblem>("problem")),
     file_name_(params.GetParamValue<std::string>("file_name")),
+    diagnostics_file_name_(params.GetParamValue<std::string>("diagnostics_file")),
     progress_interval_(params.GetParamValue<unsigned int>("progress_interval"))
 {
 }
@@ -76,7 +82,7 @@ UncollidedSolver::ExecuteSolver()
   // Initialize() is used rather than a stale copy.
   problem_->BuildSourcePoints();
   problem_->AddReflectedSourcePoints();
-  problem_->Execute(file_name_, progress_interval_);
+  problem_->Execute(file_name_, progress_interval_, diagnostics_file_name_);
   log.Log() << program_timer.GetTimeString() << " Finished solver execution " << GetName() << ".";
 }
 
