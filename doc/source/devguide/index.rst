@@ -9,3 +9,4 @@ Developer's Guide
    coding_standard
    doxygen
    py_bindings
+   material_hull_tracer
