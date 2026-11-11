@@ -323,6 +323,19 @@ protected:
                         int face_index = -1,
                         double tolerance = 1.0e-12);
 
+  /// Number of displaced start points tried for a path whose crossings are not consistent.
+  static constexpr size_t num_start_displacements = 4;
+
+  /**
+   * Returns @p point displaced into its cell: by @p attempt times 1e-10 of @p to_centroid, the
+   * vector from the point to the cell centroid, plus 1e-11 of its length in a direction that
+   * differs for each attempt, 1 to num_start_displacements. A path that passes through an edge
+   * within round-off, or lies in the plane of a face, has no consistent set of crossings; the
+   * path from the displaced point does, and its lengths differ by about 1e-10 of the cell size.
+   */
+  static Vector3
+  DisplaceStartPoint(const Vector3& point, const Vector3& to_centroid, size_t attempt);
+
   /**
    * Returns the part of the path from @p point towards a source between the fractions @p begin
    * and @p end of the unfolded path, which runs along @p unfolded_direction, folded back into
@@ -365,7 +378,9 @@ protected:
    *
    * Requires the precomputed face data of use_fast_trace_ (convex cells). Returns false, with
    * @p segments unspecified, when the walk does not end in a cell that contains @p segment_end
-   * or on a boundary face at @p segment_end. Thread-safe.
+   * or on a boundary face at @p segment_end. This happens for a segment that lies in the plane
+   * of a face, whose edges in that plane are seen end-on; the caller then displaces the start
+   * point. Thread-safe.
    */
   bool WalkSegmentWatertight(size_t start_cell,
                              const Vector3& segment_start,
@@ -519,6 +534,9 @@ protected:
   /// Number of path pieces that passed through an edge or a vertex of the mesh and were walked
   /// again with WalkSegmentWatertight.
   std::atomic<size_t> cell_walk_edge_paths_ = 0;
+  /// Number of those that lay in the plane of a face and were walked from a displaced start
+  /// point.
+  std::atomic<size_t> cell_walk_displaced_paths_ = 0;
   /// Number of times the cell walk found no exit from a cell and continued from a point
   /// displaced by the mesh ray tracer, which makes the optical depth of that path approximate.
   /// This remains for meshes with non-convex cells or faces of more than

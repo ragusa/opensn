@@ -789,6 +789,7 @@ UncollidedProblem::Execute(const std::string& file_name,
 
   cell_walk_nudged_paths_ = 0;
   cell_walk_edge_paths_ = 0;
+  cell_walk_displaced_paths_ = 0;
   timings_ = PhaseTimings();
   write_diagnostics_ = not diagnostics_file_name.empty();
   source_diagnostics_.clear();
@@ -988,7 +989,10 @@ UncollidedProblem::Execute(const std::string& file_name,
   {
     log.Log() << "Cell-walk ray tracing: " << cell_walk_edge_paths_.load()
               << " paths passed through an edge or a vertex of the mesh and were walked again "
-                 "with the edge-consistent triangle test.";
+                 "with the edge-consistent triangle test, "
+              << cell_walk_displaced_paths_.load()
+              << " of them from a start point displaced by about 1e-10 of the cell size "
+                 "because they lay in the plane of a face.";
     if (cell_walk_nudged_paths_ > 0)
       log.Log0Warning() << GetName() << ": " << cell_walk_nudged_paths_.load()
                         << " ray-traced paths found no exit from a cell and were continued "
@@ -1064,6 +1068,22 @@ UncollidedProblem::RaytraceLineInto(RayTracer& ray_tracer,
   for (size_t g = 0; g < num_groups_; ++g)
     phi_out[g] =
       strength[g] / (4.0 * M_PI * total_length * total_length) * std::exp(-scratch_mfp[g]);
+}
+
+Vector3
+UncollidedProblem::DisplaceStartPoint(const Vector3& point,
+                                      const Vector3& to_centroid,
+                                      const size_t attempt)
+{
+  // The point moves into its cell, towards the centroid, and slightly sideways so that it also
+  // leaves any plane of symmetry it shares with the centroid.
+  static const std::array<Vector3, num_start_displacements> sideways = {
+    Vector3(0.618, 0.382, 0.687),
+    Vector3(-0.451, 0.774, 0.444),
+    Vector3(0.577, -0.613, 0.540),
+    Vector3(-0.734, -0.291, 0.613)};
+  return point + static_cast<double>(attempt) * 1.0e-10 * to_centroid +
+         1.0e-11 * to_centroid.Norm() * sideways.at(attempt - 1);
 }
 
 std::pair<Vector3, Vector3>
@@ -1214,12 +1234,25 @@ UncollidedProblem::ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
           // its start with a triangle test that resolves edges and vertices consistently.
           thread_local std::vector<std::pair<size_t, double>> piece_segs;
           size_t piece_end_cell = piece_start_cell;
-          if (WalkSegmentWatertight(piece_start_cell,
-                                    segment_start,
-                                    segment_end,
-                                    piece_segs,
-                                    piece_end_cell,
-                                    tolerance))
+          bool walked = WalkSegmentWatertight(
+            piece_start_cell, segment_start, segment_end, piece_segs, piece_end_cell, tolerance);
+          // A path that lies in the plane of a face has no consistent set of crossings: the
+          // edges in that plane are seen end-on. Move its start point off the plane, into the
+          // cell, by about 1e-10 of the distance to the cell centroid.
+          const Vector3 to_centroid =
+            grid_->GetLocalCell(piece_start_cell).centroid - segment_start;
+          for (size_t attempt = 1; attempt <= num_start_displacements and not walked; ++attempt)
+          {
+            walked = WalkSegmentWatertight(piece_start_cell,
+                                           DisplaceStartPoint(segment_start, to_centroid, attempt),
+                                           segment_end,
+                                           piece_segs,
+                                           piece_end_cell,
+                                           tolerance);
+            if (walked)
+              ++cell_walk_displaced_paths_;
+          }
+          if (walked)
           {
             ++cell_walk_edge_paths_;
             scratch_segs.resize(piece_first_segment);
@@ -1513,16 +1546,6 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
                                            std::vector<double>& optical_depth,
                                            const double tolerance)
 {
-  // Displacements of the start point, relative to its distance to the cell centroid, tried in
-  // turn when the crossings of a segment are inconsistent. The first entry is the point itself.
-  // The others move it into the cell, towards the centroid and slightly sideways so that it also
-  // leaves any plane of symmetry it shares with the centroid.
-  static const std::array<Vector3, 5> displacements = {Vector3(0.0, 0.0, 0.0),
-                                                       Vector3(0.618, 0.382, 0.687),
-                                                       Vector3(-0.451, 0.774, 0.444),
-                                                       Vector3(0.577, -0.613, 0.540),
-                                                       Vector3(-0.734, -0.291, 0.613)};
-
   thread_local std::vector<HullSegment> pieces;
   thread_local HullCrossings crossings;
   thread_local std::vector<double> lengths;
@@ -1536,7 +1559,7 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
 
   bool consistent = false;
   double total_length = 0.0;
-  for (size_t attempt = 0; attempt < displacements.size() and not consistent; ++attempt)
+  for (size_t attempt = 0; attempt <= num_start_displacements and not consistent; ++attempt)
   {
     // The pieces of the path between the reflecting planes, each folded back into the domain.
     // A displaced start point changes the first piece only.
@@ -1551,8 +1574,7 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
       if ((piece_end - piece_start).Norm() <= tolerance)
         continue;
       if (pieces.empty() and attempt > 0)
-        piece_start = piece_start + static_cast<double>(attempt) * 1.0e-10 * to_centroid +
-                      1.0e-11 * to_centroid.Norm() * displacements[attempt];
+        piece_start = DisplaceStartPoint(piece_start, to_centroid, attempt);
       pieces.push_back({piece_start, piece_end});
     }
     if (attempt > 0)
