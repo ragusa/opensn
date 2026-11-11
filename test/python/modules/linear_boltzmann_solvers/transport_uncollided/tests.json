@@ -650,6 +650,37 @@
     ]
   },
   {
+    "file": "uncollided_ray_trace_method.py",
+    "comment": "method=\"ray_trace\" gives the same flux, bit for bit, as a near-source region that covers the mesh, with both ray tracers, and rejects a near-source region",
+    "num_procs": 1,
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceMethodCellWalkIdentical=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceMethodMaterialHullIdentical=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceMethodFluxNonzero=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceMethodRegionRejected=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_unstructured_analytic.py",
     "comment": "3D tetrahedral scalar-flux mesh convergence with exact near-source leakage",
     "num_procs": 1,

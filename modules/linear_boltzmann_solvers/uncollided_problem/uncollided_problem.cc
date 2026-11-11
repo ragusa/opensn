@@ -89,6 +89,15 @@ UncollidedProblem::GetInputParameters()
                                  AllowableRangeList::New({"cell_walk", "material_hull"}));
 
   params.AddOptionalParameter(
+    "method",
+    "sweep",
+    "How the cells outside the near-source regions are treated. \"sweep\" solves the "
+    "advection-removal equation of the uncollided flux in them with a sweep from the source "
+    "outward. \"ray_trace\" has no such cells: every cell is ray traced and corrected for "
+    "conservation, as the near-source cells are, and \"near_source\" is not used.");
+  params.ConstrainParameterRange("method", AllowableRangeList::New({"sweep", "ray_trace"}));
+
+  params.AddOptionalParameter(
     "hull_tracer_backend",
     "bvh",
     "Implementation of the material-hull ray tracer. \"bvh\" uses a bounding volume hierarchy. "
@@ -137,7 +146,14 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
                             " lies on a reflecting boundary, which is not supported for "
                             "uncollided generation.");
     }
-  if (near_source_logvols_.size() != GetPointSources().size())
+  if (ray_trace_all_cells_)
+  {
+    // Every cell is ray traced, so no region is needed.
+    if (not near_source_logvols_.empty())
+      errors.emplace_back("near-source logical volumes are not used with method = "
+                          "\"ray_trace\", which ray traces every cell.");
+  }
+  else if (near_source_logvols_.size() != GetPointSources().size())
     errors.emplace_back(
       "the number of near-source logical volumes must match the number of point sources.");
   else
@@ -164,6 +180,7 @@ UncollidedProblem::UncollidedProblem(const InputParameters& params)
                        ? RayTracerType::MATERIAL_HULL
                        : RayTracerType::CELL_WALK),
     hull_tracer_backend_(params.GetParamValue<std::string>("hull_tracer_backend")),
+    ray_trace_all_cells_(params.GetParamValue<std::string>("method") == "ray_trace"),
     ell_max_(params.GetParamValue<size_t>("scattering_order")),
     exact_near_source_leakage_(params.GetParamValue<bool>("exact_near_source_leakage"))
 {
@@ -358,7 +375,7 @@ UncollidedProblem::BuildSourcePoints()
     SourcePoint source_point{point_source->GetLocation(),
                              point_source->GetStrength(),
                              {},
-                             near_source_logvols_[source_index],
+                             ray_trace_all_cells_ ? nullptr : near_source_logvols_[source_index],
                              {}};
     for (const auto& subscriber : point_source->GetSubscribers())
       source_point.subscribers.push_back({subscriber.cell_local_id, subscriber.volume_weight});
@@ -540,7 +557,8 @@ UncollidedProblem::BuildSweepOrdering(const SourcePoint& source_point)
   for (const size_t cell_id : sweep_order)
   {
     const auto& cell = grid_->GetLocalCell(cell_id);
-    if (source_point.near_source_logvol and source_point.near_source_logvol->Inside(cell.centroid))
+    if (ray_trace_all_cells_ or (source_point.near_source_logvol and
+                                 source_point.near_source_logvol->Inside(cell.centroid)))
       is_near_source[cell_id] = true;
   }
 
@@ -1819,7 +1837,8 @@ void
 UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
 {
   CALI_CXX_MARK_SCOPE("RaytraceNearSourceRegion");
-  log.Log() << "\nRay-tracing near-source region.\n";
+  log.Log() << (ray_trace_all_cells_ ? "\nRay-tracing all cells.\n"
+                                     : "\nRay-tracing near-source region.\n");
 
   const auto& sdm = *discretization_;
 

@@ -370,6 +370,9 @@ protected:
   RayTracerType ray_tracer_type_ = RayTracerType::CELL_WALK;
   /// Name of the SegmentTracer implementation used by the material-hull ray tracer.
   std::string hull_tracer_backend_;
+  /// True when every cell is ray traced and corrected for conservation and no cell is swept
+  /// (method = "ray_trace").
+  bool ray_trace_all_cells_ = false;
   std::shared_ptr<const MaterialHull> hull_;
   std::unique_ptr<SegmentTracer> hull_tracer_;
   /// Total cross section of each hull material, indexed [material][group]. The last material is

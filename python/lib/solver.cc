@@ -1002,9 +1002,10 @@ WrapLBS(py::module& slv)
         that its cell subtends; the rest is counted as outflow.
     near_source : List[pyopensn.logvol.LogicalVolume]
         Near-source ray-traced region for each point source, in the same order
-        as ``point_sources``. This list is required whenever point sources are
-        provided. Its length must equal the number of point sources, and every
-        point source must lie in its corresponding region.
+        as ``point_sources``. With ``method='sweep'`` this list is required
+        whenever point sources are provided. Its length must equal the number
+        of point sources, and every point source must lie in its corresponding
+        region. With ``method='ray_trace'`` it must be omitted.
     scattering_order : int, default=0
         Maximum spherical-harmonic order written to the HDF5 file. It must be
         at least the scattering order of the collided problem that consumes
@@ -1018,6 +1019,16 @@ WrapLBS(py::module& slv)
         sensitive to where the source lies in its cell. Each treated cell costs
         additional ray tracing. Non-convex cells keep the quadrature
         treatment.
+    method : {'sweep', 'ray_trace'}, default='sweep'
+        Treatment of the cells outside the near-source regions. ``'sweep'``
+        solves the advection-removal equation of the uncollided flux in them
+        with a sweep from the source outward. ``'ray_trace'`` ray traces every
+        cell and applies the conservation correction of the near-source cells
+        to all of them, from the source outward; there is then no sweep and no
+        near-source region. Its cost is that of tracing every volume and face
+        quadrature point of the mesh for every source, which
+        ``ray_tracer='material_hull'`` keeps independent of the number of cells
+        along each path.
     ray_tracer : {'cell_walk', 'material_hull'}, default='cell_walk'
         How the optical depth between a point and a source is computed.
         ``'cell_walk'`` follows the path from cell to cell, at a cost
