@@ -55,6 +55,28 @@ struct HullCrossings
   }
 };
 
+/// Counts of the work done by a segment tracer, for monitoring. A tracer adds to them.
+struct HullTraceCounters
+{
+  /// Segments traced.
+  std::uint64_t segments = 0;
+  /// Tests of a segment against a box of the hierarchy.
+  std::uint64_t box_tests = 0;
+  /// Tests of a segment against a triangle.
+  std::uint64_t triangle_tests = 0;
+  /// Crossings found, the excluded triangles left out.
+  std::uint64_t crossings = 0;
+
+  HullTraceCounters& operator+=(const HullTraceCounters& other)
+  {
+    segments += other.segments;
+    box_tests += other.box_tests;
+    triangle_tests += other.triangle_tests;
+    crossings += other.crossings;
+    return *this;
+  }
+};
+
 /// Prepared form of a segment for the segment-triangle test.
 struct HullSegmentFrame
 {
@@ -118,11 +140,22 @@ public:
 
   /**
    * Finds every crossing of each segment with the hull. Triangles listed in excluded_triangles,
-   * which must be sorted, are ignored. The output is overwritten.
+   * which must be sorted, are ignored. The output is overwritten. The work done is added to
+   * counters.
    */
   virtual void Trace(const std::vector<HullSegment>& segments,
                      const std::vector<std::uint32_t>& excluded_triangles,
-                     HullCrossings& crossings) const = 0;
+                     HullCrossings& crossings,
+                     HullTraceCounters& counters) const = 0;
+
+  /// As above, without the counts of the work done.
+  void Trace(const std::vector<HullSegment>& segments,
+             const std::vector<std::uint32_t>& excluded_triangles,
+             HullCrossings& crossings) const
+  {
+    HullTraceCounters counters;
+    Trace(segments, excluded_triangles, crossings, counters);
+  }
 
   /// Marks a segment whose crossings are not consistent in TraceLengths.
   static constexpr std::uint32_t INVALID_MATERIAL = std::numeric_limits<std::uint32_t>::max();

@@ -14,7 +14,8 @@ BruteForceSegmentTracer::BruteForceSegmentTracer(std::shared_ptr<const MaterialH
 void
 BruteForceSegmentTracer::Trace(const std::vector<HullSegment>& segments,
                                const std::vector<std::uint32_t>& excluded_triangles,
-                               HullCrossings& crossings) const
+                               HullCrossings& crossings,
+                               HullTraceCounters& counters) const
 {
   const auto num_triangles = static_cast<std::uint32_t>(hull_->GetTriangles().size());
 
@@ -29,6 +30,9 @@ BruteForceSegmentTracer::Trace(const std::vector<HullSegment>& segments,
     SortCrossings(crossings.crossings, first);
     crossings.offsets.push_back(crossings.crossings.size());
   }
+  counters.segments += segments.size();
+  counters.triangle_tests += segments.size() * num_triangles;
+  counters.crossings += crossings.crossings.size();
 }
 
 } // namespace opensn

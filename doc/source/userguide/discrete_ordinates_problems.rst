@@ -722,6 +722,14 @@ The solver ends with the wall time spent in each phase: material hull, cell
 ordering, ray tracing, conservation correction, bulk sweep, image sources,
 balance and moments, and output.
 
+``hull_tracer_statistics=True`` on the problem adds a report of the work of the
+material-hull ray tracer, summed over the ranks and threads: the number of
+paths, of segments (a path folded at reflecting boundaries has several), of
+segment-box and segment-triangle tests and of crossings, and the time spent
+searching the hull. The search time is a sum over the threads, so it compares
+with the wall time of the ray-tracing phase only on one rank and one thread.
+The same numbers are attributes of the diagnostics file.
+
 Source support
 --------------
 

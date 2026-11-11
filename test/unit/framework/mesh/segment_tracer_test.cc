@@ -652,6 +652,44 @@ TEST(SegmentTracerTest, CreateAndBatchInterface)
   EXPECT_LT(bvh.GetNumNodes(), 2U * model.Hull(true)->GetTriangles().size());
 }
 
+TEST(SegmentTracerTest, CountersReportTheWorkDone)
+{
+  const auto model = hull_test::MakeDoglegVoxelModel();
+  const auto hull = model.Hull(true);
+  const std::size_t num_triangles = hull->GetTriangles().size();
+  RandomPoints random(Vector3(-1.0, -1.0, -1.0), Vector3(1.0, 1.0, 1.0), 11);
+  std::vector<HullSegment> segments;
+  segments.reserve(200);
+  for (int s = 0; s < 200; ++s)
+    segments.push_back({random(), random()});
+
+  HullCrossings crossings;
+  HullTraceCounters brute_force;
+  SegmentTracer::Create("brute_force", hull)->Trace(segments, {}, crossings, brute_force);
+  EXPECT_EQ(brute_force.segments, segments.size());
+  EXPECT_EQ(brute_force.box_tests, 0U);
+  EXPECT_EQ(brute_force.triangle_tests, segments.size() * num_triangles);
+  EXPECT_EQ(brute_force.crossings, crossings.crossings.size());
+  EXPECT_GT(brute_force.crossings, 0U);
+
+  // The hierarchy finds the same crossings with fewer triangle tests. The counters add up over
+  // the calls.
+  HullTraceCounters bvh;
+  const auto tracer = SegmentTracer::Create("bvh", hull);
+  tracer->Trace(segments, {}, crossings, bvh);
+  EXPECT_EQ(bvh.segments, segments.size());
+  EXPECT_EQ(bvh.crossings, brute_force.crossings);
+  EXPECT_GE(bvh.box_tests, segments.size());
+  EXPECT_GE(bvh.triangle_tests, bvh.crossings);
+  EXPECT_LT(bvh.triangle_tests, brute_force.triangle_tests);
+  const HullTraceCounters once = bvh;
+  tracer->Trace(segments, {}, crossings, bvh);
+  EXPECT_EQ(bvh.segments, 2 * once.segments);
+  EXPECT_EQ(bvh.box_tests, 2 * once.box_tests);
+  EXPECT_EQ(bvh.triangle_tests, 2 * once.triangle_tests);
+  EXPECT_EQ(bvh.crossings, 2 * once.crossings);
+}
+
 TEST(SegmentTracerTest, MeshHullMatchesVoxelReference)
 {
   const auto grid = hull_test::BuildDoglegMesh();

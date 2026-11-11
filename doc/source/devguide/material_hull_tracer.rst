@@ -181,6 +181,11 @@ segment passes through. The boxes are padded by more than the round-off of the
 box test, and both tracers use the same triangle test, so their crossings are
 identical.
 
+``Trace`` adds the work it does to a ``HullTraceCounters``: segments, segment-box
+tests, segment-triangle tests and crossings. The counts depend only on the hull and
+on the segments, not on the machine, which makes them the measure to compare
+search strategies with.
+
 ``SegmentTracer::Create`` selects a tracer by name. A tracer built on a
 third-party library would be a third implementation of the interface, enabled by
 its own CMake option.

@@ -19,6 +19,7 @@
 #include "framework/runtime.h"
 #include "caliper/cali.h"
 #include <boost/graph/topological_sort.hpp>
+#include <chrono>
 #include <iomanip>
 #include <numeric>
 #include <queue>
@@ -171,6 +172,13 @@ UncollidedProblem::GetInputParameters()
   params.ConstrainParameterRange("hull_tracer_backend",
                                  AllowableRangeList::New({"bvh", "brute_force"}));
 
+  params.AddOptionalParameter(
+    "hull_tracer_statistics",
+    false,
+    "Report the work of the material-hull ray tracer: the number of paths, of segment-box and "
+    "segment-triangle tests and of crossings, and the time spent searching the hull. The "
+    "timing adds two clock readings per path.");
+
   return params;
 }
 
@@ -272,6 +280,7 @@ UncollidedProblem::UncollidedProblem(const InputParameters& params)
                        : RayTracerType::CELL_WALK),
     hull_tracer_backend_(params.GetParamValue<std::string>("hull_tracer_backend")),
     ray_trace_all_cells_(params.GetParamValue<std::string>("method") == "ray_trace"),
+    hull_tracer_statistics_(params.GetParamValue<bool>("hull_tracer_statistics")),
     ell_max_(params.GetParamValue<size_t>("scattering_order")),
     exact_near_source_leakage_(params.GetParamValue<bool>("exact_near_source_leakage"))
 {
@@ -790,6 +799,8 @@ UncollidedProblem::Execute(const std::string& file_name,
   cell_walk_nudged_paths_ = 0;
   cell_walk_edge_paths_ = 0;
   cell_walk_displaced_paths_ = 0;
+  hull_statistics_ = HullStatistics();
+  ThreadHullStatistics() = HullStatistics();
   timings_ = PhaseTimings();
   write_diagnostics_ = not diagnostics_file_name.empty();
   source_diagnostics_.clear();
@@ -983,8 +994,12 @@ UncollidedProblem::Execute(const std::string& file_name,
   timings_.image_sources = phase_timer.GetTime() / 1000.0;
 
   if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
+  {
     log.Log() << "Material-hull ray tracing: " << hull_retraced_segments_.load()
               << " paths were traced again from a displaced start point.";
+    if (hull_tracer_statistics_)
+      ReportHullStatistics();
+  }
   else if (cell_walk_edge_paths_ > 0 or cell_walk_nudged_paths_ > 0)
   {
     log.Log() << "Cell-walk ray tracing: " << cell_walk_edge_paths_.load()
@@ -1556,6 +1571,8 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
   const std::uint32_t cell_material = cell_hull_materials_[cell.local_id];
   const Vector3 to_centroid = cell.centroid - qp_xyz;
   const Vector3 unfolded_direction = source_point.location - qp_xyz;
+  HullStatistics& statistics = ThreadHullStatistics();
+  ++statistics.paths;
 
   bool consistent = false;
   double total_length = 0.0;
@@ -1580,7 +1597,19 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
     if (attempt > 0)
       ++hull_retraced_segments_;
 
-    hull_tracer_->Trace(pieces, source_point.hull_excluded_triangles, crossings);
+    if (hull_tracer_statistics_)
+    {
+      const auto start = std::chrono::steady_clock::now();
+      hull_tracer_->Trace(
+        pieces, source_point.hull_excluded_triangles, crossings, statistics.counters);
+      statistics.search_time +=
+        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                     std::chrono::steady_clock::now() - start)
+                                     .count());
+    }
+    else
+      hull_tracer_->Trace(
+        pieces, source_point.hull_excluded_triangles, crossings, statistics.counters);
 
     // The material at the end of the last piece is that of the source. The material at the
     // start of a piece is the material at the end of the piece before it.
@@ -1632,6 +1661,47 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
     if (lengths[m] != 0.0)
       for (size_t g = 0; g < num_groups_; ++g)
         optical_depth[g] += hull_sigma_t_[m][g] * lengths[m];
+}
+
+UncollidedProblem::HullStatistics&
+UncollidedProblem::ThreadHullStatistics()
+{
+  thread_local HullStatistics statistics;
+  return statistics;
+}
+
+void
+UncollidedProblem::FlushHullThreadStatistics()
+{
+  HullStatistics& statistics = ThreadHullStatistics();
+  const std::scoped_lock lock(hull_statistics_mutex_);
+  hull_statistics_ += statistics;
+  statistics = HullStatistics();
+}
+
+void
+UncollidedProblem::ReportHullStatistics()
+{
+  const auto Sum = [](std::uint64_t& value)
+  {
+    if (opensn::mpi_comm.size() > 1)
+      opensn::mpi_comm.all_reduce(value, mpi::op::sum<std::uint64_t>());
+  };
+  Sum(hull_statistics_.paths);
+  Sum(hull_statistics_.counters.segments);
+  Sum(hull_statistics_.counters.box_tests);
+  Sum(hull_statistics_.counters.triangle_tests);
+  Sum(hull_statistics_.counters.crossings);
+  Sum(hull_statistics_.search_time);
+
+  log.Log() << "Material-hull tracer statistics, summed over the ranks and threads:\n"
+            << " Paths                    = " << hull_statistics_.paths << "\n"
+            << " Segments                 = " << hull_statistics_.counters.segments << "\n"
+            << " Box tests                = " << hull_statistics_.counters.box_tests << "\n"
+            << " Triangle tests           = " << hull_statistics_.counters.triangle_tests << "\n"
+            << " Crossings                = " << hull_statistics_.counters.crossings << "\n"
+            << " Search time (s)          = " << std::fixed << std::setprecision(3)
+            << 1.0e-9 * static_cast<double>(hull_statistics_.search_time) << "\n";
 }
 
 void
@@ -1830,6 +1900,7 @@ UncollidedProblem::ProjectReflectedImageSources(const unsigned int progress_inte
       }
       thread_removals[thread_id] = local_removal;
       thread_outflows[thread_id] = local_outflow;
+      FlushHullThreadStatistics();
     }
     catch (...)
     {
@@ -2553,6 +2624,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
                               near_spls_[n],
                               is_exact_neighbor[near_spls_[n]],
                               raw_cells[n]);
+        FlushHullThreadStatistics();
       }
       catch (...)
       {
@@ -3391,6 +3463,20 @@ UncollidedProblem::WriteDiagnostics(const std::string& file_name) const
           H5WriteDataset1D<uint64_t>(file, "bulk cell ids" + suffix, diagnostics.bulk_cell_ids) and
           H5WriteDataset1D<double>(
             file, "bulk balance residual" + suffix, diagnostics.bulk_residuals);
+      }
+      if (written and hull_tracer_statistics_ and ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
+      {
+        const auto& counters = hull_statistics_.counters;
+        written =
+          H5CreateAttribute<uint64_t>(file, "hull tracer paths", hull_statistics_.paths) and
+          H5CreateAttribute<uint64_t>(file, "hull tracer segments", counters.segments) and
+          H5CreateAttribute<uint64_t>(file, "hull tracer box tests", counters.box_tests) and
+          H5CreateAttribute<uint64_t>(
+            file, "hull tracer triangle tests", counters.triangle_tests) and
+          H5CreateAttribute<uint64_t>(file, "hull tracer crossings", counters.crossings) and
+          H5CreateAttribute<double>(file,
+                                    "hull tracer search time",
+                                    1.0e-9 * static_cast<double>(hull_statistics_.search_time));
       }
       OpenSnLogicalErrorIf(not written,
                            GetName() + ": failed to write the uncollided diagnostics file.");

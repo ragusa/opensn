@@ -16,7 +16,9 @@ public:
 
   void Trace(const std::vector<HullSegment>& segments,
              const std::vector<std::uint32_t>& excluded_triangles,
-             HullCrossings& crossings) const override;
+             HullCrossings& crossings,
+             HullTraceCounters& counters) const override;
+  using SegmentTracer::Trace;
 };
 
 } // namespace opensn

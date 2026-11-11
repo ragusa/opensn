@@ -1044,6 +1044,14 @@ WrapLBS(py::module& slv)
         Implementation of the ``'material_hull'`` ray tracer. ``'bvh'`` uses a
         bounding volume hierarchy. ``'brute_force'`` tests every triangle of
         the hull and is meant for verification. Ignored with ``'cell_walk'``.
+    hull_tracer_statistics : bool, default=False
+        Report the work of the ``'material_hull'`` ray tracer at the end of
+        :meth:`UncollidedSolver.Execute`, summed over the ranks and threads:
+        the number of paths, of segments (a path folded at reflecting
+        boundaries has several), of segment-box tests, of segment-triangle
+        tests and of crossings, and the time spent searching the hull. The
+        timing adds two clock readings per path. The same numbers are written
+        as attributes of the diagnostics file. Ignored with ``'cell_walk'``.
 
     Notes
     -----
@@ -2011,7 +2019,13 @@ WrapUncollidedSolver(py::module& slv)
         (``balance residual s``), both indexed ``[cell * num_groups + group]``
         in the order of the cell ids, and the relative balance residuals of the
         swept cells (``bulk cell ids s``, ``bulk balance residual s``). The
-        attributes ``num groups`` and ``num sources`` give the sizes.
+        attributes ``num groups`` and ``num sources`` give the sizes. With
+        ``hull_tracer_statistics`` on the problem, the attributes
+        ``hull tracer paths``, ``hull tracer segments``,
+        ``hull tracer box tests``, ``hull tracer triangle tests``,
+        ``hull tracer crossings`` and ``hull tracer search time`` (seconds,
+        summed over the ranks and threads) hold the work of the material-hull
+        ray tracer.
 
     Notes
     -----

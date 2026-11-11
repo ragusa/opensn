@@ -224,10 +224,13 @@ BVHSegmentTracer::Build()
 void
 BVHSegmentTracer::Trace(const std::vector<HullSegment>& segments,
                         const std::vector<std::uint32_t>& excluded_triangles,
-                        HullCrossings& crossings) const
+                        HullCrossings& crossings,
+                        HullTraceCounters& counters) const
 {
   crossings.crossings.clear();
   crossings.offsets.assign(1, 0);
+  std::uint64_t box_tests = 0;
+  std::uint64_t triangle_tests = 0;
 
   thread_local std::vector<std::uint32_t> stack;
   for (const auto& segment : segments)
@@ -245,6 +248,7 @@ BVHSegmentTracer::Trace(const std::vector<HullSegment>& segments,
       {
         const Node& node = nodes_[stack.back()];
         stack.pop_back();
+        ++box_tests;
 
         // Part of the segment, as a fraction of its length, that lies in the box.
         double enter = 0.0;
@@ -274,13 +278,20 @@ BVHSegmentTracer::Trace(const std::vector<HullSegment>& segments,
           stack.push_back(node.first + 1);
         }
         else
+        {
+          triangle_tests += node.count;
           for (std::uint32_t i = node.first; i < node.first + node.count; ++i)
             TestTriangle(frame, triangle_ids_[i], excluded_triangles, crossings.crossings);
+        }
       }
     }
     SortCrossings(crossings.crossings, first);
     crossings.offsets.push_back(crossings.crossings.size());
   }
+  counters.segments += segments.size();
+  counters.box_tests += box_tests;
+  counters.triangle_tests += triangle_tests;
+  counters.crossings += crossings.crossings.size();
 }
 
 } // namespace opensn

@@ -216,6 +216,35 @@ protected:
     double output = 0.0;
   };
 
+  /// Work and time of the material-hull ray tracer, for monitoring.
+  struct HullStatistics
+  {
+    /// Paths between a point and a source whose optical depth was computed.
+    std::uint64_t paths = 0;
+    HullTraceCounters counters;
+    /// Time spent searching the hull for the crossings of the paths, in nanoseconds and summed
+    /// over the threads. Measured only with hull_tracer_statistics.
+    std::uint64_t search_time = 0;
+
+    HullStatistics& operator+=(const HullStatistics& other)
+    {
+      paths += other.paths;
+      counters += other.counters;
+      search_time += other.search_time;
+      return *this;
+    }
+  };
+
+  /// The statistics that the calling thread gathered since its last flush.
+  static HullStatistics& ThreadHullStatistics();
+
+  /// Adds the statistics of the calling thread to those of the problem and resets them. Each
+  /// thread that traces paths calls this when it is done. Thread-safe.
+  void FlushHullThreadStatistics();
+
+  /// Sums the statistics over the ranks and reports them from rank 0. Collective.
+  void ReportHullStatistics();
+
   /// Writes the diagnostics file from rank 0. Collective.
   void WriteDiagnostics(const std::string& file_name) const;
 
@@ -522,6 +551,8 @@ protected:
   /// True when every cell is ray traced and corrected for conservation and no cell is swept
   /// (method = "ray_trace").
   bool ray_trace_all_cells_ = false;
+  /// True when the work of the material-hull ray tracer is timed and reported.
+  bool hull_tracer_statistics_ = false;
   std::shared_ptr<const MaterialHull> hull_;
   std::unique_ptr<SegmentTracer> hull_tracer_;
   /// Total cross section of each hull material, indexed [material][group]. The last material is
@@ -531,6 +562,10 @@ protected:
   std::vector<std::uint32_t> cell_hull_materials_;
   /// Number of paths traced again from a displaced start point.
   std::atomic<size_t> hull_retraced_segments_ = 0;
+  /// Statistics of the material-hull ray tracer: those of this rank while paths are traced, those
+  /// of all ranks after ReportHullStatistics.
+  HullStatistics hull_statistics_;
+  std::mutex hull_statistics_mutex_;
   /// Number of path pieces that passed through an edge or a vertex of the mesh and were walked
   /// again with WalkSegmentWatertight.
   std::atomic<size_t> cell_walk_edge_paths_ = 0;
