@@ -38,11 +38,16 @@ The material hull
   own with a zero cross section.
 
 A kept face is turned into triangles in the same way the piecewise-linear
-spatial discretization defines the surface of a cell: a face with more than
-three vertices is split into one triangle per edge around the face centroid,
-which is the average of the face vertices. A face with three vertices is planar,
-so it is kept as one triangle. The tracer therefore sees the faceted geometry of
-the solver, including for non-planar faces.
+spatial discretization defines the surface of a cell: it is split into one
+triangle per edge around the face centroid, which is the average of the face
+vertices. The tracer therefore sees the faceted geometry of the solver,
+including for non-planar faces, and each hull triangle is a side triangle of the
+discretization, identified by its cell, face and side.
+
+A face with three vertices is planar, so splitting it does not change the
+surface. It is split all the same: the rule is then the same for every face, at
+the cost of three times as many triangles on tetrahedral meshes and of about one
+fifth more tracing time there.
 
 Each triangle stores its three vertices, the material on each side, the boundary
 id of a boundary face, and the cell, face and side it comes from. The normal

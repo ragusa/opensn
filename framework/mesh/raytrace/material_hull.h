@@ -35,7 +35,8 @@ struct HullTriangle
   std::uint64_t owner_cell = 0;
   /// Face index in the owner cell.
   std::uint32_t face = 0;
-  /// Index of the triangle within the face.
+  /// Index of the triangle within the face: the triangle is (face vertex side, face vertex
+  /// side + 1, face centroid).
   std::uint32_t side = 0;
 };
 
@@ -47,9 +48,10 @@ struct HullTriangle
  * surfaces as triangles: a face is kept when its two cells have different block ids or when it is
  * a domain-boundary face, whose far side is the exterior.
  *
- * Faces with more than three vertices are split into triangles around the face centroid, which is
- * the surface the piecewise-linear spatial discretization uses. A face with three vertices is
- * planar and is kept as one triangle.
+ * Every face is split into one triangle per edge around the face centroid. These are the side
+ * triangles of the piecewise-linear spatial discretization, so the hull is the surface the solver
+ * uses, including for non-planar faces, and a hull triangle is identified by the (cell, face,
+ * side) of a side triangle. A face with three vertices is split too, for uniformity.
  *
  * The hull of the whole mesh is replicated on every MPI rank and its triangles are sorted by
  * (owner cell global id, face, side), so it does not depend on the partitioning. Its memory cost

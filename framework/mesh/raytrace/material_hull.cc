@@ -111,27 +111,18 @@ MaterialHull::Extract(const Mesh& grid, const FaceSelection selection)
       OpenSnLogicalErrorIf(num_vertices < 3,
                            "Cell " + std::to_string(cell->global_id) + " face " +
                              std::to_string(f) + " has fewer than three vertices.");
-      if (num_vertices == 3)
-        emit(grid.GlobalVertex(vertex_ids[0]),
-             grid.GlobalVertex(vertex_ids[1]),
-             grid.GlobalVertex(vertex_ids[2]),
+      // One triangle per edge of the face around the face centroid: the side triangles of the
+      // piecewise-linear discretization, for a face with three vertices too.
+      for (std::size_t side = 0; side < num_vertices; ++side)
+        emit(grid.GlobalVertex(vertex_ids[side]),
+             grid.GlobalVertex(vertex_ids[(side + 1) % num_vertices]),
+             face.centroid,
              cell->block_id,
              front_block,
              boundary_id,
              cell->global_id,
              f,
-             0);
-      else
-        for (std::size_t side = 0; side < num_vertices; ++side)
-          emit(grid.GlobalVertex(vertex_ids[side]),
-               grid.GlobalVertex(vertex_ids[(side + 1) % num_vertices]),
-               face.centroid,
-               cell->block_id,
-               front_block,
-               boundary_id,
-               cell->global_id,
-               f,
-               side);
+             side);
     }
 
   const auto coords = GatherFromAllRanks(local_coords);

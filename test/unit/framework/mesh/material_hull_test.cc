@@ -123,7 +123,7 @@ TEST(MaterialHullTest, AllFacesSelectionKeepsEveryFace)
   EXPECT_EQ(hull->GetBlockIDs(), std::vector<unsigned int>({0, 1, 2}));
 }
 
-TEST(MaterialHullTest, TriangularFacesAreKeptWhole)
+TEST(MaterialHullTest, TriangularFacesAreSplitAroundTheirCentroid)
 {
   const auto grid = BuildTetMesh();
   const auto hull = MaterialHull::Extract(*grid);
@@ -140,12 +140,17 @@ TEST(MaterialHullTest, TriangularFacesAreKeptWhole)
   std::size_t boundary_faces = 0;
   mpi_comm.all_reduce(local_boundary_faces, boundary_faces, mpi::op::sum<std::size_t>());
 
-  ASSERT_EQ(hull->GetTriangles().size(), boundary_faces);
+  // Three side triangles per face, as for the piecewise-linear discretization.
+  ASSERT_EQ(hull->GetTriangles().size(), 3U * boundary_faces);
   double area = 0.0;
-  for (const auto& triangle : hull->GetTriangles())
+  for (std::size_t t = 0; t < hull->GetTriangles().size(); ++t)
   {
-    EXPECT_EQ(triangle.side, 0U);
+    const auto& triangle = hull->GetTriangles()[t];
+    EXPECT_EQ(triangle.side, t % 3U);
     area += TriangleArea(triangle);
+    // The third vertex is the face centroid, shared by the three triangles of the face.
+    EXPECT_EQ((triangle.vertices[2] - hull->GetTriangles()[t - t % 3U].vertices[2]).NormSquare(),
+              0.0);
   }
   // The mesh is a cube of side 0.032.
   EXPECT_NEAR(area, 6.0 * 0.032 * 0.032, 1.0e-15);
