@@ -494,13 +494,19 @@ UncollidedProblem::BuildSweepOrdering(const SourcePoint& source_point)
   }
 
   std::vector<size_t> sweep_order;
-  boost::topological_sort(local_cell_graph, std::back_inserter(sweep_order));
-  std::reverse(sweep_order.begin(), sweep_order.end());
-  if (sweep_order.empty())
+  try
   {
-    throw std::logic_error("UncollidedProblem: Cyclic dependencies found "
-                           "in the local cell graph.");
+    boost::topological_sort(local_cell_graph, std::back_inserter(sweep_order));
   }
+  catch (const boost::not_a_dag&)
+  {
+    OpenSnLogicalError(GetName() +
+                       ": the cells cannot be ordered outward from the point source "
+                       "at " +
+                       source_point.location.PrintStr() +
+                       " because their face orientations form a cycle.");
+  }
+  std::reverse(sweep_order.begin(), sweep_order.end());
 
   // Near-source region cells plus their incoming dependencies.
   //
