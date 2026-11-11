@@ -250,29 +250,16 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
 bool
 UncollidedProblem::IsOnDomainBoundary(const PointSource& point_source) const
 {
-  // The source is on the boundary when it lies on a side triangle of a boundary face of one of
-  // its cells, which can be on any rank.
-  constexpr double relative_tolerance = 1.0e-9;
-  const Vector3& location = point_source.GetLocation();
+  // The source is on the boundary when it lies on a boundary face of one of its cells, which
+  // can be on any rank.
   int on_boundary = 0;
   for (const auto& subscriber : point_source.GetSubscribers())
   {
     const Cell& cell = grid_->GetLocalCell(subscriber.cell_local_id);
-    for (const auto& face : cell.faces)
-    {
-      if (face.has_neighbor)
-        continue;
-      const size_t num_sides = face.vertex_ids.size();
-      for (size_t side = 0; side < num_sides; ++side)
-      {
-        const Vector3& a = grid_->GlobalVertex(face.vertex_ids[side]);
-        const Vector3& b = grid_->GlobalVertex(face.vertex_ids[(side + 1) % num_sides]);
-        const double distance =
-          (ClosestPointOnTriangle(location, a, b, face.centroid) - location).Norm();
-        if (distance <= relative_tolerance * (b - a).Norm())
-          on_boundary = 1;
-      }
-    }
+    for (size_t f = 0; f < cell.faces.size(); ++f)
+      if (not cell.faces[f].has_neighbor and
+          grid_->CheckPointInsideCellFace(cell, f, point_source.GetLocation()))
+        on_boundary = 1;
   }
   opensn::mpi_comm.all_reduce(on_boundary, mpi::op::max<int>());
   return on_boundary != 0;
