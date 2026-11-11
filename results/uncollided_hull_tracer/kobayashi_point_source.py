@@ -19,6 +19,11 @@ Arguments (set with --py name=value):
                 "C": every cell traced with the material hull
     prefix      prefix of the output files, relative to the working directory
     mesh_dir    directory of the Kobayashi meshes
+    lineout     False to skip the flux along the centerline of the duct (default True)
+
+and, passed to the problem when given, the options of the material-hull ray tracer:
+hull_tracer_backend, hull_tracer_leaf_size, hull_tracer_search, hull_tracer_direction_bins and
+hull_tracer_statistics.
 
 Outputs: <prefix>.h5 (uncollided flux moments), <prefix>_diagnostics.h5 (scale factors and
 balance residuals of the cells) and <prefix>_lineout.csv (flux along the centerline of the duct).
@@ -49,6 +54,10 @@ if "prefix" not in globals():
     prefix = f"kobayashi_{mesh_name}_{strategy}"
 if "mesh_dir" not in globals():
     mesh_dir = "../../test/assets/mesh/kobayashi"
+if "lineout" not in globals():
+    lineout = True
+TRACER_OPTIONS = ("hull_tracer_backend", "hull_tracer_leaf_size", "hull_tracer_search",
+                  "hull_tracer_direction_bins", "hull_tracer_statistics")
 
 MESH_FILES = {
     "coarse": "kobayashi_dog_leg.msh",
@@ -102,6 +111,8 @@ if __name__ == "__main__":
             RPPLogicalVolume(xmin=-1.0, xmax=10.0, ymin=-1.0, ymax=10.0, zmin=-1.0, zmax=10.0)
         ]
 
+    options.update({name: globals()[name] for name in TRACER_OPTIONS if name in globals()})
+
     problem = UncollidedProblem(
         mesh=grid,
         num_groups=1,
@@ -121,18 +132,20 @@ if __name__ == "__main__":
     solver.Initialize()
     solver.Execute()
 
-    scalar_flux = problem.GetScalarFluxFieldFunction()[0]
     rows = []
-    for s, point in centerline_points():
-        interpolation = FieldFunctionInterpolationPoint()
-        interpolation.SetPointOfInterest(Vector3(*point))
-        interpolation.AddFieldFunction(scalar_flux)
-        interpolation.Execute()
-        rows.append((s, *point, interpolation.GetPointValue()))
+    if lineout:
+        scalar_flux = problem.GetScalarFluxFieldFunction()[0]
+        for s, point in centerline_points():
+            interpolation = FieldFunctionInterpolationPoint()
+            interpolation.SetPointOfInterest(Vector3(*point))
+            interpolation.AddFieldFunction(scalar_flux)
+            interpolation.Execute()
+            rows.append((s, *point, interpolation.GetPointValue()))
     if rank == 0:
-        with open(f"{prefix}_lineout.csv", "w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow(["s", "x", "y", "z", "phi"])
-            writer.writerows(rows)
+        if lineout:
+            with open(f"{prefix}_lineout.csv", "w", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow(["s", "x", "y", "z", "phi"])
+                writer.writerows(rows)
         print(f"KobayashiPointSourceDone={mesh_name},{strategy},{size}")
         sys.stdout.flush()
