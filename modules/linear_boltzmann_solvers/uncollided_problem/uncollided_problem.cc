@@ -1125,20 +1125,24 @@ UncollidedProblem::BuildMaterialHull()
           "does not support.");
   }
 
-  // The folded path of an image source ends at its physical source.
-  const size_t num_images_per_source =
-    source_points_.empty() ? 0 : reflected_source_points_.size() / source_points_.size();
-  for (size_t i = 0; i < reflected_source_points_.size(); ++i)
+  // The folded path of an image source ends at its physical source. The images of a physical
+  // source follow one another in reflected_source_points_.
+  if (not source_points_.empty())
   {
-    const auto& physical_source = source_points_[i / num_images_per_source];
-    auto& image_source = reflected_source_points_[i];
-    image_source.hull_material = physical_source.hull_material;
-    image_source.hull_excluded_triangles.clear();
-    std::set_union(physical_source.hull_excluded_triangles.begin(),
-                   physical_source.hull_excluded_triangles.end(),
-                   reflecting_triangles.begin(),
-                   reflecting_triangles.end(),
-                   std::back_inserter(image_source.hull_excluded_triangles));
+    const size_t num_images_per_source = reflected_source_points_.size() / source_points_.size();
+    for (size_t s = 0; s < source_points_.size(); ++s)
+      for (size_t k = 0; k < num_images_per_source; ++k)
+      {
+        const auto& physical_source = source_points_[s];
+        auto& image_source = reflected_source_points_[s * num_images_per_source + k];
+        image_source.hull_material = physical_source.hull_material;
+        image_source.hull_excluded_triangles.clear();
+        std::set_union(physical_source.hull_excluded_triangles.begin(),
+                       physical_source.hull_excluded_triangles.end(),
+                       reflecting_triangles.begin(),
+                       reflecting_triangles.end(),
+                       std::back_inserter(image_source.hull_excluded_triangles));
+      }
   }
 
   hull_retraced_segments_ = 0;
