@@ -60,6 +60,9 @@ protected:
   /// Uncollided-generation rules.
   void CheckConfigurationErrors(std::vector<std::string>& errors) const override;
 
+  /// True when a point source lies on a boundary face of one of its cells. Collective.
+  bool IsOnDomainBoundary(const PointSource& point_source) const;
+
   struct ReflectionPlane
   {
     std::uint64_t boundary_id = 0;

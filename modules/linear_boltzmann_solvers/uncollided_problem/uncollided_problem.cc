@@ -232,15 +232,49 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
         errors.emplace_back("point source " + std::to_string(i) +
                             " lies outside its near-source logical volume.");
 
-  // Point sources are located in the mesh when the problem is built.
+  // Point sources are located in the mesh when the problem is built. A source that belongs to
+  // several cells is supported on the domain boundary, where each cell receives the part of
+  // the source emitted into the solid angle it subtends and the rest leaves the domain.
   if (discretization_)
     for (const auto& point_source : GetPointSources())
-      if (point_source->GetNumGlobalSubscribers() != 1)
+      if (point_source->GetNumGlobalSubscribers() != 1 and not IsOnDomainBoundary(*point_source))
       {
         errors.emplace_back("point sources on a face, edge, or vertex shared by more than one "
-                            "cell are not currently supported for uncollided generation.");
+                            "cell are not currently supported for uncollided generation, "
+                            "except on the domain boundary.");
         break;
       }
+}
+
+bool
+UncollidedProblem::IsOnDomainBoundary(const PointSource& point_source) const
+{
+  // The source is on the boundary when it lies on a side triangle of a boundary face of one of
+  // its cells, which can be on any rank.
+  constexpr double relative_tolerance = 1.0e-9;
+  const Vector3& location = point_source.GetLocation();
+  int on_boundary = 0;
+  for (const auto& subscriber : point_source.GetSubscribers())
+  {
+    const Cell& cell = grid_->GetLocalCell(subscriber.cell_local_id);
+    for (const auto& face : cell.faces)
+    {
+      if (face.has_neighbor)
+        continue;
+      const size_t num_sides = face.vertex_ids.size();
+      for (size_t side = 0; side < num_sides; ++side)
+      {
+        const Vector3& a = grid_->GlobalVertex(face.vertex_ids[side]);
+        const Vector3& b = grid_->GlobalVertex(face.vertex_ids[(side + 1) % num_sides]);
+        const double distance =
+          (ClosestPointOnTriangle(location, a, b, face.centroid) - location).Norm();
+        if (distance <= relative_tolerance * (b - a).Norm())
+          on_boundary = 1;
+      }
+    }
+  }
+  opensn::mpi_comm.all_reduce(on_boundary, mpi::op::max<int>());
+  return on_boundary != 0;
 }
 
 UncollidedProblem::UncollidedProblem(const InputParameters& params)
@@ -587,7 +621,15 @@ UncollidedProblem::BuildSweepOrdering(const SourcePoint& source_point)
     size_t f = 0;
     for (auto& face : cell->faces)
     {
-      // Determine if the face is incident
+      // Determine if the face is incident. A face whose plane contains the source carries no
+      // current. It is recognized by its distance to the source and not by the sign of mu, which
+      // is then round-off: the centroid of a face in the plane z = 0.7 is not exactly in it.
+      const auto ContainsSource = [&source_point](const CellFace& candidate)
+      {
+        const Vector3 to_centroid = candidate.centroid - source_point.location;
+        return std::abs(candidate.normal.Dot(to_centroid)) <=
+               1.0e-12 * std::max(to_centroid.Norm(), std::sqrt(candidate.area));
+      };
       FaceOrientation orientation = FOPARALLEL;
       Vector3 omega = ComputeOmega(source_point.location, face.centroid);
       const double mu = omega.Dot(face.normal);
@@ -598,7 +640,9 @@ UncollidedProblem::BuildSweepOrdering(const SourcePoint& source_point)
 
       if (owns_face)
       {
-        if (mu > tolerance)
+        if (ContainsSource(face))
+          orientation = FOPARALLEL;
+        else if (mu > tolerance)
           orientation = FOOUTGOING;
         else if (mu < -tolerance)
           orientation = FOINCOMING;
@@ -633,7 +677,9 @@ UncollidedProblem::BuildSweepOrdering(const SourcePoint& source_point)
         const auto& adj_face = adj_cell.faces[face.GetNeighborAdjacentFaceIndex(grid_.get())];
         const double adj_mu =
           ComputeOmega(source_point.location, adj_face.centroid).Dot(adj_face.normal);
-        if (adj_mu > tolerance)
+        if (ContainsSource(adj_face))
+          orientation = FOPARALLEL;
+        else if (adj_mu > tolerance)
           orientation = FOINCOMING;
         else if (adj_mu < -tolerance)
           orientation = FOOUTGOING;
@@ -1112,8 +1158,22 @@ UncollidedProblem::ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
     const size_t piece_start_cell = cell_id;
     const size_t piece_first_segment = scratch_segs.size();
     Vector3 line_point = segment_start;
+    // The last piece ends at the source.
+    const bool ends_at_source = interval + 2 == breakpoints.size();
     while (remaining_distance > tolerance)
     {
+      // The rest of the path lies in a convex cell that contains the source. Stopping here also
+      // covers a source on a vertex of the cell, where no exit face can be found.
+      if (ends_at_source and all_cells_convex_ and
+          std::any_of(source_point.subscribers.begin(),
+                      source_point.subscribers.end(),
+                      [cell_id](const auto& subscriber)
+                      { return subscriber.cell_local_id == cell_id; }))
+      {
+        scratch_segs.emplace_back(cell_id, remaining_distance);
+        break;
+      }
+
       double dist_in_cell = NAN;
       Vector3 exit_point;
       uint64_t dest_neighbor = 0;
