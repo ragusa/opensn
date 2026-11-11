@@ -7,7 +7,9 @@
 #include "modules/linear_boltzmann_solvers/lbs_problem/lbs_problem.h"
 #include "framework/mesh/mesh/mesh.h"
 #include "framework/mesh/logical_volume/logical_volume.h"
+#include "framework/mesh/raytrace/material_hull.h"
 #include "framework/mesh/raytrace/raytracer.h"
+#include "framework/mesh/raytrace/segment_tracer.h"
 #include "framework/mesh/mesh/cell.h"
 #include "framework/data_types/dense_matrix.h"
 #include "framework/data_types/vector.h"
@@ -71,6 +73,21 @@ protected:
     std::vector<Subscriber> subscribers;
     std::shared_ptr<LogicalVolume> near_source_logvol;
     std::vector<ReflectionPlane> reflection_planes;
+    /// Material-hull ray tracer only: the hull material at the source, and the sorted hull
+    /// triangles that a path ending at the source ignores. For an image source these are the
+    /// material of its physical source, where its folded path ends, and the triangles at that
+    /// source and on the reflecting boundaries.
+    std::uint32_t hull_material = 0;
+    std::vector<std::uint32_t> hull_excluded_triangles;
+  };
+
+  /// How the optical depth between a point and a source is computed.
+  enum class RayTracerType
+  {
+    /// Walk from cell to cell along the path.
+    CELL_WALK,
+    /// Intersect the path with the material hull of the mesh.
+    MATERIAL_HULL
   };
 
   enum class CellRegion
@@ -108,16 +125,20 @@ protected:
 
   void ProjectReflectedImageSources(unsigned int progress_interval);
 
+  /// Uncollided flux at @p qp_xyz, a point of @p cell. @p face_index is the face of the cell
+  /// the point lies on, or -1 for a point inside the cell.
   std::vector<double> RaytraceLine(RayTracer& ray_tracer,
                                    const Cell& cell,
                                    const Vector3& qp_xyz,
                                    const SourcePoint& source_point,
+                                   int face_index = -1,
                                    double tolerance = 1.0e-12);
 
   /// Zero-allocation variant: writes into pre-allocated @p phi_out and reuses the three
   /// scratch vectors. All four buffers must be sized to @p num_groups_ before the first call
   /// (they are reset internally each call, so no manual clearing is needed between calls).
   /// On return, @p scratch_mfp holds the optical depth from the source to @p qp_xyz per group.
+  /// The optical depth is computed by the ray tracer selected with the "ray_tracer" parameter.
   void RaytraceLineInto(RayTracer& ray_tracer,
                         const Cell& cell,
                         const Vector3& qp_xyz,
@@ -126,7 +147,58 @@ protected:
                         std::vector<std::pair<size_t, double>>& scratch_segs,
                         std::vector<double>& scratch_bp,
                         std::vector<double>& scratch_mfp,
+                        int face_index = -1,
                         double tolerance = 1.0e-12);
+
+  /**
+   * Returns the part of the path from @p point towards a source between the fractions @p begin
+   * and @p end of the unfolded path, which runs along @p unfolded_direction, folded back into
+   * the domain by reflection in the planes it has crossed. For a physical source there is no
+   * plane and the path is returned unchanged.
+   */
+  static std::pair<Vector3, Vector3> FoldSegment(const Vector3& point,
+                                                 const Vector3& unfolded_direction,
+                                                 double begin,
+                                                 double end,
+                                                 const std::vector<ReflectionPlane>& planes);
+
+  /**
+   * Optical depth between a point of a cell and a source, by walking from cell to cell.
+   *
+   * @p breakpoints are the fractions of the unfolded path at which it crosses a reflecting
+   * plane, with 0 and 1 at the ends. The path through each cell is accumulated in
+   * @p scratch_segs.
+   */
+  void ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
+                                   const Cell& cell,
+                                   const Vector3& qp_xyz,
+                                   const SourcePoint& source_point,
+                                   std::vector<std::pair<size_t, double>>& scratch_segs,
+                                   const std::vector<double>& breakpoints,
+                                   std::vector<double>& optical_depth,
+                                   double tolerance);
+
+  /**
+   * Optical depth between a point of a cell and a source, from the lengths of the path in each
+   * material. The path is intersected with the material hull only, so its cost does not grow
+   * with the number of cells it crosses.
+   *
+   * The crossings must be consistent with the material of the cell; for a point on a face
+   * (@p face_index >= 0) the material beyond the face is accepted too. When they are not, which
+   * can only happen when the path passes through a hull edge or vertex within round-off, the
+   * start point is displaced into the cell by about 1e-10 of its distance to the cell centroid
+   * and the path is traced again. Thread-safe.
+   */
+  void ComputeHullOpticalDepth(const Cell& cell,
+                               const Vector3& qp_xyz,
+                               const SourcePoint& source_point,
+                               const std::vector<double>& breakpoints,
+                               int face_index,
+                               std::vector<double>& optical_depth,
+                               double tolerance);
+
+  /// Builds the material hull, its tracer and the hull data of the source points. Collective.
+  void BuildMaterialHull();
 
   /// Integrals of the uncollided flux of a point source over a cell.
   struct ExactCellIntegrals
@@ -232,6 +304,22 @@ protected:
   std::unordered_map<uint64_t, uint32_t> global_to_local_id_;
   /// True when all_cells_convex_ and all faces have <= FaceVertData::max_sides vertices.
   bool use_fast_trace_ = false;
+
+  RayTracerType ray_tracer_type_ = RayTracerType::CELL_WALK;
+  /// Name of the SegmentTracer implementation used by the material-hull ray tracer.
+  std::string hull_tracer_backend_;
+  std::shared_ptr<const MaterialHull> hull_;
+  std::unique_ptr<SegmentTracer> hull_tracer_;
+  /// Total cross section of each hull material, indexed [material][group]. The last material is
+  /// the exterior, a void.
+  std::vector<std::vector<double>> hull_sigma_t_;
+  /// Hull material of each local cell.
+  std::vector<std::uint32_t> cell_hull_materials_;
+  /// Number of paths traced again from a displaced start point.
+  std::atomic<size_t> hull_retraced_segments_ = 0;
+  /// Number of times the cell walk found no exit from a cell and continued from a point
+  /// displaced by the mesh ray tracer, which makes the optical depth of that path approximate.
+  std::atomic<size_t> cell_walk_nudged_paths_ = 0;
 
   unsigned int ell_max_ = 0;
   /// Integrate the leakages and volume integrals of the cells that share a vertex with a point

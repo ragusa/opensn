@@ -185,6 +185,47 @@ identical.
 third-party library would be a third implementation of the interface, enabled by
 its own CMake option.
 
+Use in the uncollided problem
+-----------------------------
+
+``UncollidedProblem`` uses the tracer when ``ray_tracer="material_hull"``. The
+hull, the tracer, the total cross section of each hull material and the hull
+material of each cell are built at the start of ``Execute``, once for all
+sources. For each source, ``FindEndPointExclusions`` gives the triangles to
+ignore and the material at the source is that of its cell.
+
+``RaytraceLineInto`` computes the optical depth of one path either with
+``ComputeCellWalkOpticalDepth`` or with ``ComputeHullOpticalDepth``. Everything
+else, the quadrature points, the projection, the exact integration next to the
+source and the conservation correction, is shared by the two tracers.
+
+``ComputeHullOpticalDepth`` checks every path:
+
+- The start material returned by ``ComputeMaterialLengths`` must be the material
+  of the cell the point belongs to. For a point on a face of the cell, the
+  material beyond that face is accepted too.
+- If the check fails, the start point is displaced into the cell by about
+  :math:`10^{-10}` of its distance to the cell centroid, slightly sideways so
+  that it also leaves any plane of symmetry, and the path is traced again, up
+  to four times. The number of retraced paths is logged. A path that still
+  fails is an error.
+- A path with a nonzero length in the exterior is an error: a point source must
+  see every cell through the mesh.
+
+The path to an image source is folded at the reflecting planes. Its pieces are
+traced together and processed from the source end backwards: the material at the
+start of a piece is the material at the end of the piece before it. A folded
+path touches the reflecting boundaries without crossing them, so their triangles
+are excluded for image sources.
+
+The cell walk has no exact treatment of a path that passes through an edge or a
+vertex of the mesh. Its search for the exit face of a cell then finds nothing
+and it falls back on ``RayTracer::TraceRay``, which displaces the point by about
+one percent of the cell size. The lengths of such a path are off by a similar
+amount. These paths are counted and reported. They occur on regular meshes for
+sources at simple coordinates; the material-hull tracer is exact for them, which
+``SegmentTracerTest.QuadraturePointsOfEveryCellMatchVoxelReference`` checks.
+
 Tests
 -----
 

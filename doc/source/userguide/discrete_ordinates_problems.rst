@@ -598,6 +598,61 @@ is already represented by the uncollided flux and the generated
 first-collision source. The collided problem rejects any volumetric or point
 source and any incoming-flux boundary; see `Supported problem mode`_.
 
+Ray tracers
+-----------
+
+The near-source region, the cells next to the source and the image sources are
+ray traced: the flux at a quadrature point is the point kernel attenuated by the
+optical depth of the straight path to the source. ``ray_tracer`` selects how
+that optical depth is computed. Both tracers use the same quadrature points,
+the same projection and the same conservation correction.
+
+``ray_tracer="cell_walk"`` (default)
+   The path is followed from cell to cell and the total cross section of each
+   cell is multiplied by the chord through it. The cost of a path grows with
+   the number of cells it crosses.
+
+``ray_tracer="material_hull"``
+   Cross sections are constant in a block, so only the faces across which the
+   block id changes, and the domain boundary, change the optical depth. These
+   faces, the *material hull*, are extracted once and a path is intersected
+   with them only. The cost of a path grows with the logarithm of the number of
+   hull triangles and with the number of interfaces it crosses, not with the
+   number of cells. Prefer it when the near-source region is large, when there
+   are reflecting boundaries, whose image sources are traced from every cell,
+   or when the mesh is fine compared with the material regions.
+
+   A point source may lie on the domain boundary but not on a face between two
+   block ids. The output reports the size of the hull and the number of paths
+   that had to be traced again from a displaced start point, which is zero
+   unless a path passes within round-off of a hull edge.
+
+The two tracers agree to round-off, with one exception. When a path passes
+exactly through an edge or a vertex of the mesh, the cell walk finds no exit
+face and continues from a point displaced by about one percent of the cell
+size, which changes the path lengths by a similar amount. This happens on
+regular meshes when the source sits at simple coordinates. The cell walk
+reports how many paths were affected; the material-hull tracer treats these
+paths exactly. Moving the source by a small generic amount removes the
+difference.
+
+``hull_tracer_backend`` selects the implementation of the material-hull tracer:
+``"bvh"`` (default) or ``"brute_force"``, which tests every hull triangle and is
+meant for verification. See :ref:`material-hull-tracer` for the method.
+
+.. code-block:: python
+
+   uncollided = UncollidedProblem(
+       mesh=mesh,
+       num_groups=1,
+       groupsets=[{"groups_from_to": [0, 0]}],
+       xs_map=xs_map,
+       point_sources=[point_source],
+       near_source=[near_source],
+       scattering_order=1,
+       ray_tracer="material_hull",
+   )
+
 Source support
 --------------
 

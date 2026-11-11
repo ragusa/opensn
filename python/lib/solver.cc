@@ -1018,6 +1018,21 @@ WrapLBS(py::module& slv)
         sensitive to where the source lies in its cell. Each treated cell costs
         additional ray tracing. Non-convex cells keep the quadrature
         treatment.
+    ray_tracer : {'cell_walk', 'material_hull'}, default='cell_walk'
+        How the optical depth between a point and a source is computed.
+        ``'cell_walk'`` follows the path from cell to cell, at a cost
+        proportional to the number of cells along it. ``'material_hull'``
+        intersects the path only with the faces across which the block id
+        changes and with the domain boundary, so its cost does not grow with
+        the number of cells along the path. Both use the same quadrature
+        points and give the same optical depth to round-off. With
+        ``'material_hull'``, a point source must not lie on a face between two
+        block ids.
+    hull_tracer_backend : {'bvh', 'brute_force'}, default='bvh'
+        Implementation of the ``'material_hull'`` ray tracer. ``'bvh'`` uses a
+        bounding volume hierarchy. ``'brute_force'`` tests every triangle of
+        the hull and is meant for verification. Ignored with ``'cell_walk'``.
+
     Notes
     -----
     Only explicit point sources are supported by the uncollided generator.

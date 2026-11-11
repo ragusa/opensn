@@ -1164,6 +1164,18 @@ Notes:
 #. The inversion of the :math:`L` operator in the uncollided problem can
    be done using ray tracing, thus mitigating ray effects.
 
+#. Ray tracing evaluates the optical depth
+   :math:`\tau_g = \int_0^L \sigma_{t,g}\,ds` of the straight path between a
+   point and the source. OpenSn has two ways of doing so, selected with
+   ``ray_tracer``. The cell walk sums :math:`\sigma_{t,g}` times the chord over
+   the cells along the path. The material-hull tracer uses the fact that the
+   cross sections are constant in a material: it computes the length
+   :math:`\ell_m` of the path in each material from its crossings with the
+   faces between materials and with the domain boundary, and sets
+   :math:`\tau_g = \sum_m \sigma_{t,g,m}\,\ell_m`. The lengths do not depend
+   on the group. Both are the same integral, evaluated at the same quadrature
+   points; see :ref:`material-hull-tracer`.
+
 #. Near a localized source the uncollided flux varies too steeply for the
    far-field treatment, and the cells that contain the source need a
    treatment of their own. The flux of a point source is singular at the

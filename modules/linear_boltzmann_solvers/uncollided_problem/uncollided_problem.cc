@@ -9,6 +9,7 @@
 #include "framework/math/quadratures/quadrature_order.h"
 #include "framework/math/quadratures/gausslegendre_quadrature.h"
 #include "framework/math/quadratures/angular/legendre_poly/legendrepoly.h"
+#include "framework/data_types/allowable_range.h"
 #include "framework/logging/log.h"
 #include "framework/utils/error.h"
 #include "framework/utils/timer.h"
@@ -77,6 +78,24 @@ UncollidedProblem::GetInputParameters()
     "quadrature. This improves accuracy when a source lies close to an edge or vertex of its "
     "cell, at the cost of additional ray tracing.");
 
+  params.AddOptionalParameter(
+    "ray_tracer",
+    "cell_walk",
+    "How the optical depth between a point and a source is computed. \"cell_walk\" follows the "
+    "path from cell to cell. \"material_hull\" intersects the path only with the faces across "
+    "which the material changes and with the domain boundary, so its cost does not grow with "
+    "the number of cells along the path. Both give the same optical depth to round-off.");
+  params.ConstrainParameterRange("ray_tracer",
+                                 AllowableRangeList::New({"cell_walk", "material_hull"}));
+
+  params.AddOptionalParameter(
+    "hull_tracer_backend",
+    "bvh",
+    "Implementation of the material-hull ray tracer. \"bvh\" uses a bounding volume hierarchy. "
+    "\"brute_force\" tests every triangle of the hull and is meant for verification.");
+  params.ConstrainParameterRange("hull_tracer_backend",
+                                 AllowableRangeList::New({"bvh", "brute_force"}));
+
   return params;
 }
 
@@ -141,6 +160,10 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
 
 UncollidedProblem::UncollidedProblem(const InputParameters& params)
   : LBSProblem(params),
+    ray_tracer_type_(params.GetParamValue<std::string>("ray_tracer") == "material_hull"
+                       ? RayTracerType::MATERIAL_HULL
+                       : RayTracerType::CELL_WALK),
+    hull_tracer_backend_(params.GetParamValue<std::string>("hull_tracer_backend")),
     ell_max_(params.GetParamValue<size_t>("scattering_order")),
     exact_near_source_leakage_(params.GetParamValue<bool>("exact_near_source_leakage"))
 {
@@ -589,6 +612,10 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
   reflected_removal_ = 0.0;
   out_flow_ = 0.0;
 
+  cell_walk_nudged_paths_ = 0;
+  if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
+    BuildMaterialHull();
+
   // Create h5 file
   const auto raw_file = H5Fcreate(file_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
   OpenSnInvalidArgumentIf(
@@ -747,6 +774,15 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
   if (not reflected_source_points_.empty())
     ProjectReflectedImageSources(progress_interval);
 
+  if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
+    log.Log() << "Material-hull ray tracing: " << hull_retraced_segments_.load()
+              << " paths were traced again from a displaced start point.";
+  else if (cell_walk_nudged_paths_ > 0)
+    log.Log() << "Cell-walk ray tracing: " << cell_walk_nudged_paths_.load()
+              << " paths found no exit from a cell, which happens when a path passes through "
+                 "an edge or a vertex of the mesh, and were continued from a displaced point. "
+                 "Their optical depth is approximate.";
+
   WriteFluxMoments(file);
 
   // Finalize balance calculation
@@ -763,6 +799,7 @@ UncollidedProblem::RaytraceLineInto(RayTracer& ray_tracer,
                                     std::vector<std::pair<size_t, double>>& scratch_segs,
                                     std::vector<double>& scratch_bp,
                                     std::vector<double>& scratch_mfp,
+                                    const int face_index,
                                     const double tolerance)
 {
   const auto& pt_loc = source_point.location;
@@ -771,9 +808,6 @@ UncollidedProblem::RaytraceLineInto(RayTracer& ray_tracer,
   const double total_length = (pt_loc - qp_xyz).Norm();
   OpenSnLogicalErrorIf(total_length < 1.0e-15,
                        GetName() + ": point source lies at cell quadrature point.");
-
-  auto ReflectPoint = [](const Vector3& point, const ReflectionPlane& plane)
-  { return point - 2.0 * (plane.normal.Dot(point) - plane.offset) * plane.normal; };
 
   scratch_bp.clear();
   scratch_bp.push_back(0.0);
@@ -792,19 +826,62 @@ UncollidedProblem::RaytraceLineInto(RayTracer& ray_tracer,
   }
   std::sort(scratch_bp.begin(), scratch_bp.end());
 
+  if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
+    ComputeHullOpticalDepth(
+      cell, qp_xyz, source_point, scratch_bp, face_index, scratch_mfp, tolerance);
+  else
+    ComputeCellWalkOpticalDepth(
+      ray_tracer, cell, qp_xyz, source_point, scratch_segs, scratch_bp, scratch_mfp, tolerance);
+
+  for (size_t g = 0; g < num_groups_; ++g)
+    phi_out[g] =
+      strength[g] / (4.0 * M_PI * total_length * total_length) * std::exp(-scratch_mfp[g]);
+}
+
+std::pair<Vector3, Vector3>
+UncollidedProblem::FoldSegment(const Vector3& point,
+                               const Vector3& unfolded_direction,
+                               const double begin,
+                               const double end,
+                               const std::vector<ReflectionPlane>& planes)
+{
+  auto ReflectPoint = [](const Vector3& point, const ReflectionPlane& plane)
+  { return point - 2.0 * (plane.normal.Dot(point) - plane.offset) * plane.normal; };
+
+  Vector3 segment_start = point + begin * unfolded_direction;
+  Vector3 segment_end = point + end * unfolded_direction;
+  const Vector3 midpoint = 0.5 * (segment_start + segment_end);
+  for (const auto& plane : planes)
+    if (plane.normal.Dot(midpoint) > plane.offset)
+    {
+      segment_start = ReflectPoint(segment_start, plane);
+      segment_end = ReflectPoint(segment_end, plane);
+    }
+  return {segment_start, segment_end};
+}
+
+void
+UncollidedProblem::ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
+                                               const Cell& cell,
+                                               const Vector3& qp_xyz,
+                                               const SourcePoint& source_point,
+                                               std::vector<std::pair<size_t, double>>& scratch_segs,
+                                               const std::vector<double>& breakpoints,
+                                               std::vector<double>& optical_depth,
+                                               const double tolerance)
+{
+  const auto& pt_loc = source_point.location;
+  const auto unfolded_direction = pt_loc - qp_xyz;
+
   scratch_segs.clear();
   size_t cell_id = cell.local_id;
-  for (size_t interval = 0; interval + 1 < scratch_bp.size(); ++interval)
+  for (size_t interval = 0; interval + 1 < breakpoints.size(); ++interval)
   {
-    Vector3 segment_start = qp_xyz + scratch_bp[interval] * unfolded_direction;
-    Vector3 segment_end = qp_xyz + scratch_bp[interval + 1] * unfolded_direction;
-    const Vector3 midpoint = 0.5 * (segment_start + segment_end);
-    for (const auto& plane : source_point.reflection_planes)
-      if (plane.normal.Dot(midpoint) > plane.offset)
-      {
-        segment_start = ReflectPoint(segment_start, plane);
-        segment_end = ReflectPoint(segment_end, plane);
-      }
+    const auto [segment_start, segment_end] = FoldSegment(qp_xyz,
+                                                          unfolded_direction,
+                                                          breakpoints[interval],
+                                                          breakpoints[interval + 1],
+                                                          source_point.reflection_planes);
 
     double remaining_distance = (segment_end - segment_start).Norm();
     if (remaining_distance <= tolerance)
@@ -887,6 +964,7 @@ UncollidedProblem::RaytraceLineInto(RayTracer& ray_tracer,
 
         if (not found)
         {
+          ++cell_walk_nudged_paths_;
           // Rare fallback for degenerate cases (point on a face/vertex): let TraceRay nudge.
           auto trace_point = line_point;
           auto trace_direction = segment_omega;
@@ -983,17 +1061,198 @@ UncollidedProblem::RaytraceLineInto(RayTracer& ray_tracer,
     }
   }
 
-  scratch_mfp.assign(num_groups_, 0.0);
+  optical_depth.assign(num_groups_, 0.0);
   for (const auto& segment : scratch_segs)
   {
     const auto& sigma_t = cell_transport_views_[segment.first].GetXS().GetSigmaTotal();
     for (size_t g = 0; g < num_groups_; ++g)
-      scratch_mfp[g] += sigma_t[g] * segment.second;
+      optical_depth[g] += sigma_t[g] * segment.second;
+  }
+}
+void
+UncollidedProblem::BuildMaterialHull()
+{
+  CALI_CXX_MARK_SCOPE("BuildMaterialHull");
+
+  Timer timer;
+  hull_ = MaterialHull::Extract(*grid_);
+  hull_tracer_ = SegmentTracer::Create(hull_tracer_backend_, hull_);
+
+  // Total cross section of each hull material; the exterior, the last material, is a void.
+  const std::uint32_t num_materials = hull_->GetNumMaterials();
+  hull_sigma_t_.assign(static_cast<size_t>(num_materials) + 1, std::vector<double>(num_groups_));
+  for (std::uint32_t m = 0; m < num_materials; ++m)
+    hull_sigma_t_[m] = GetBlockID2XSMap().at(hull_->GetBlockIDs()[m])->GetSigmaTotal();
+
+  cell_hull_materials_.resize(grid_->GetLocalCellCount());
+  for (const auto& cell : grid_->GetLocalCells())
+    cell_hull_materials_[cell->local_id] = hull_->GetMaterialIndex(cell->block_id);
+
+  // A path that is folded at a reflecting boundary touches that boundary but does not cross it.
+  std::vector<std::uint32_t> reflecting_triangles;
+  const auto& triangles = hull_->GetTriangles();
+  for (size_t t = 0; t < triangles.size(); ++t)
+    if (triangles[t].front_material == hull_->GetExteriorIndex() and
+        IsReflectingBoundary(triangles[t].boundary_id))
+      reflecting_triangles.push_back(static_cast<std::uint32_t>(t));
+
+  for (size_t i = 0; i < source_points_.size(); ++i)
+  {
+    auto& source_point = source_points_[i];
+    try
+    {
+      source_point.hull_excluded_triangles = hull_->FindEndPointExclusions(source_point.location);
+    }
+    catch (const std::invalid_argument&)
+    {
+      OpenSnInvalidArgument(GetName() + ": point source " + std::to_string(i) + " at " +
+                            source_point.location.PrintStr() +
+                            " lies on an interface between two materials, which the "
+                            "material-hull ray tracer does not support.");
+    }
+
+    OpenSnLogicalErrorIf(source_point.subscribers.empty(),
+                         GetName() + ": point source " + std::to_string(i) +
+                           " has no cell on this rank.");
+    source_point.hull_material =
+      cell_hull_materials_[source_point.subscribers.front().cell_local_id];
+    for (const auto& subscriber : source_point.subscribers)
+      OpenSnInvalidArgumentIf(
+        cell_hull_materials_[subscriber.cell_local_id] != source_point.hull_material,
+        GetName() + ": point source " + std::to_string(i) + " at " +
+          source_point.location.PrintStr() +
+          " lies on an interface between two materials, which the material-hull ray tracer "
+          "does not support.");
   }
 
-  for (size_t g = 0; g < num_groups_; ++g)
-    phi_out[g] =
-      strength[g] / (4.0 * M_PI * total_length * total_length) * std::exp(-scratch_mfp[g]);
+  // The folded path of an image source ends at its physical source.
+  const size_t num_images_per_source =
+    source_points_.empty() ? 0 : reflected_source_points_.size() / source_points_.size();
+  for (size_t i = 0; i < reflected_source_points_.size(); ++i)
+  {
+    const auto& physical_source = source_points_[i / num_images_per_source];
+    auto& image_source = reflected_source_points_[i];
+    image_source.hull_material = physical_source.hull_material;
+    image_source.hull_excluded_triangles.clear();
+    std::set_union(physical_source.hull_excluded_triangles.begin(),
+                   physical_source.hull_excluded_triangles.end(),
+                   reflecting_triangles.begin(),
+                   reflecting_triangles.end(),
+                   std::back_inserter(image_source.hull_excluded_triangles));
+  }
+
+  hull_retraced_segments_ = 0;
+  log.Log() << "Material hull: " << triangles.size() << " triangles between " << num_materials
+            << " materials and the exterior, " << hull_tracer_backend_ << " tracer, built in "
+            << std::fixed << std::setprecision(3) << timer.GetTime() / 1000.0 << " s.";
+}
+
+void
+UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
+                                           const Vector3& qp_xyz,
+                                           const SourcePoint& source_point,
+                                           const std::vector<double>& breakpoints,
+                                           const int face_index,
+                                           std::vector<double>& optical_depth,
+                                           const double tolerance)
+{
+  // Displacements of the start point, relative to its distance to the cell centroid, tried in
+  // turn when the crossings of a segment are inconsistent. The first entry is the point itself.
+  // The others move it into the cell, towards the centroid and slightly sideways so that it also
+  // leaves any plane of symmetry it shares with the centroid.
+  static const std::array<Vector3, 5> displacements = {Vector3(0.0, 0.0, 0.0),
+                                                       Vector3(0.618, 0.382, 0.687),
+                                                       Vector3(-0.451, 0.774, 0.444),
+                                                       Vector3(0.577, -0.613, 0.540),
+                                                       Vector3(-0.734, -0.291, 0.613)};
+
+  thread_local std::vector<HullSegment> pieces;
+  thread_local HullCrossings crossings;
+  thread_local std::vector<double> lengths;
+  thread_local std::vector<double> piece_lengths;
+
+  const std::uint32_t exterior = hull_->GetExteriorIndex();
+  const std::uint32_t num_materials = exterior + 1;
+  const std::uint32_t cell_material = cell_hull_materials_[cell.local_id];
+  const Vector3 to_centroid = cell.centroid - qp_xyz;
+  const Vector3 unfolded_direction = source_point.location - qp_xyz;
+
+  bool consistent = false;
+  double total_length = 0.0;
+  for (size_t attempt = 0; attempt < displacements.size() and not consistent; ++attempt)
+  {
+    // The pieces of the path between the reflecting planes, each folded back into the domain.
+    // A displaced start point changes the first piece only.
+    pieces.clear();
+    for (size_t interval = 0; interval + 1 < breakpoints.size(); ++interval)
+    {
+      auto [piece_start, piece_end] = FoldSegment(qp_xyz,
+                                                  unfolded_direction,
+                                                  breakpoints[interval],
+                                                  breakpoints[interval + 1],
+                                                  source_point.reflection_planes);
+      if ((piece_end - piece_start).Norm() <= tolerance)
+        continue;
+      if (pieces.empty() and attempt > 0)
+        piece_start = piece_start + static_cast<double>(attempt) * 1.0e-10 * to_centroid +
+                      1.0e-11 * to_centroid.Norm() * displacements[attempt];
+      pieces.push_back({piece_start, piece_end});
+    }
+    if (attempt > 0)
+      ++hull_retraced_segments_;
+
+    hull_tracer_->Trace(pieces, source_point.hull_excluded_triangles, crossings);
+
+    // The material at the end of the last piece is that of the source. The material at the
+    // start of a piece is the material at the end of the piece before it.
+    lengths.assign(num_materials, 0.0);
+    piece_lengths.resize(num_materials);
+    std::uint32_t material = source_point.hull_material;
+    total_length = 0.0;
+    for (size_t p = pieces.size(); p-- > 0 and material != SegmentTracer::INVALID_MATERIAL;)
+    {
+      const double length = (pieces[p].end - pieces[p].start).Norm();
+      material = ComputeMaterialLengths(crossings.Begin(p),
+                                        crossings.End(p),
+                                        length,
+                                        material,
+                                        num_materials,
+                                        piece_lengths.data());
+      for (std::uint32_t m = 0; m < num_materials; ++m)
+        lengths[m] += piece_lengths[m];
+      total_length += length;
+    }
+
+    // The path must start in the material of the cell. A point on a face of the cell may also
+    // be found on the far side of that face.
+    consistent = material == cell_material;
+    if (not consistent and material != SegmentTracer::INVALID_MATERIAL and face_index >= 0)
+    {
+      const auto& face = cell.faces[face_index];
+      const std::uint32_t far_material =
+        face.has_neighbor ? hull_->GetMaterialIndex(grid_->GetGlobalCell(face.neighbor_id).block_id)
+                          : exterior;
+      consistent = material == far_material;
+    }
+  }
+  OpenSnLogicalErrorIf(not consistent,
+                       GetName() +
+                         ": the material-hull ray tracer found inconsistent material "
+                         "crossings between the point " +
+                         qp_xyz.PrintStr() + " of cell " + std::to_string(cell.global_id) +
+                         " and the source at " + source_point.location.PrintStr() + ".");
+  OpenSnLogicalErrorIf(lengths[exterior] > 1.0e-9 * total_length,
+                       GetName() + ": the path between the point " + qp_xyz.PrintStr() +
+                         " of cell " + std::to_string(cell.global_id) + " and the source at " +
+                         source_point.location.PrintStr() +
+                         " leaves the mesh. Uncollided generation requires that a point "
+                         "source sees every cell through the mesh.");
+
+  optical_depth.assign(num_groups_, 0.0);
+  for (std::uint32_t m = 0; m < exterior; ++m)
+    if (lengths[m] != 0.0)
+      for (size_t g = 0; g < num_groups_; ++g)
+        optical_depth[g] += hull_sigma_t_[m][g] * lengths[m];
 }
 
 void
@@ -1136,7 +1395,8 @@ UncollidedProblem::ProjectReflectedImageSources(const unsigned int progress_inte
                                phi_qp,
                                scratch_segs,
                                scratch_bp,
-                               scratch_mfp);
+                               scratch_mfp,
+                               static_cast<int>(f));
               for (size_t g = 0; g < num_groups_; ++g)
                 local_outflow += phi_qp[g] * integrand;
             }
@@ -1342,7 +1602,8 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
         {
           const auto& qp_xyz = fe_srf_data.QPointXYZ(qp);
           const auto omega = ComputeOmega(pt_loc, qp_xyz);
-          const auto phi_qp = RaytraceLine(ray_tracer, cell, qp_xyz, source_point);
+          const auto phi_qp =
+            RaytraceLine(ray_tracer, cell, qp_xyz, source_point, static_cast<int>(f));
           const double integrand = (*swf)(qp_xyz)*omega.Dot(normal) * fe_srf_data.JxW(qp);
 
           for (size_t g = 0; g < num_groups_; ++g)
@@ -1697,6 +1958,7 @@ UncollidedProblem::RaytraceLine(RayTracer& ray_tracer,
                                 const Cell& cell,
                                 const Vector3& qp_xyz,
                                 const SourcePoint& source_point,
+                                const int face_index,
                                 const double tolerance)
 {
   std::vector<double> phi(num_groups_, 0.0);
@@ -1705,8 +1967,16 @@ UncollidedProblem::RaytraceLine(RayTracer& ray_tracer,
   std::vector<double> scratch_mfp(num_groups_, 0.0);
   scratch_segs.reserve(16);
   scratch_bp.reserve(8);
-  RaytraceLineInto(
-    ray_tracer, cell, qp_xyz, source_point, phi, scratch_segs, scratch_bp, scratch_mfp, tolerance);
+  RaytraceLineInto(ray_tracer,
+                   cell,
+                   qp_xyz,
+                   source_point,
+                   phi,
+                   scratch_segs,
+                   scratch_bp,
+                   scratch_mfp,
+                   face_index,
+                   tolerance);
   return phi;
 }
 
@@ -1729,46 +1999,6 @@ ForEachCompositeGaussPoint(const double a, const double b, const Function& f)
       f(left + 0.5 * width * (panel_quadrature.qpoints[q].x + 1.0),
         0.5 * width * panel_quadrature.weights[q]);
   }
-}
-
-/// Returns the point of triangle ABC closest to P (Ericson, Real-Time Collision Detection, 5.1.5).
-Vector3
-ClosestPointOnTriangle(const Vector3& P, const Vector3& A, const Vector3& B, const Vector3& C)
-{
-  const Vector3 ab = B - A;
-  const Vector3 ac = C - A;
-  const Vector3 ap = P - A;
-  const double d1 = ab.Dot(ap);
-  const double d2 = ac.Dot(ap);
-  if (d1 <= 0.0 and d2 <= 0.0)
-    return A;
-
-  const Vector3 bp = P - B;
-  const double d3 = ab.Dot(bp);
-  const double d4 = ac.Dot(bp);
-  if (d3 >= 0.0 and d4 <= d3)
-    return B;
-
-  const double vc = d1 * d4 - d3 * d2;
-  if (vc <= 0.0 and d1 >= 0.0 and d3 <= 0.0)
-    return A + (d1 / (d1 - d3)) * ab;
-
-  const Vector3 cp = P - C;
-  const double d5 = ab.Dot(cp);
-  const double d6 = ac.Dot(cp);
-  if (d6 >= 0.0 and d5 <= d6)
-    return C;
-
-  const double vb = d5 * d2 - d1 * d6;
-  if (vb <= 0.0 and d2 >= 0.0 and d6 <= 0.0)
-    return A + (d2 / (d2 - d6)) * ac;
-
-  const double va = d3 * d6 - d5 * d4;
-  if (va <= 0.0 and (d4 - d3) >= 0.0 and (d5 - d6) >= 0.0)
-    return B + ((d4 - d3) / ((d4 - d3) + (d5 - d6))) * (C - B);
-
-  const double denominator = 1.0 / (va + vb + vc);
-  return A + (vb * denominator) * ab + (vc * denominator) * ac;
 }
 
 /// Calls visit(x, w) at quadrature points x on triangle T and their solid-angle weights w as seen
@@ -1958,8 +2188,15 @@ UncollidedProblem::IntegrateCellExactly(RayTracer& ray_tracer,
             const double chord = std::max(0.0, R - R_in);
 
             // On return, scratch_mfp holds the optical depth from the source to x.
-            RaytraceLineInto(
-              ray_tracer, cell, x, source_point, phi, scratch_segs, scratch_bp, scratch_mfp);
+            RaytraceLineInto(ray_tracer,
+                             cell,
+                             x,
+                             source_point,
+                             phi,
+                             scratch_segs,
+                             scratch_bp,
+                             scratch_mfp,
+                             static_cast<int>(f));
             for (size_t g = 0; g < num_groups_; ++g)
             {
               const double optical_chord = sigma_t[g] * chord;
