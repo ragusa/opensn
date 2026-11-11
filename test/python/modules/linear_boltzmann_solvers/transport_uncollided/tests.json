@@ -1,7 +1,7 @@
 [
   {
     "file": "uncollided_input_rejections.py",
-    "comment": "Uncollided generation rejects missing point sources, near-source mismatches, and boundary-aligned point sources",
+    "comment": "Uncollided generation rejects missing point sources, near-source mismatches, and boundary-aligned point sources, and a point source on a material interface with the material-hull ray tracer",
     "num_procs": 1,
     "checks": [
       {
@@ -25,6 +25,12 @@
       {
         "type": "KeyValuePair",
         "key": "UncollidedTwoDimensionalMeshRejected=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedHullInterfaceSourceRejected=",
         "goldvalue": 1.0,
         "abs_tol": 0.0
       }
@@ -149,6 +155,223 @@
         "key": "UncollidedBoundarySourcePrismMaxRelativeError=",
         "goldvalue": 0.015965,
         "abs_tol": 0.005
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on a corner of a cube of tetrahedra shared by four cells, cell_walk ray tracer, method sweep: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"corner\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_corner_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.0313960487,
+        "abs_tol": 0.01
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on a corner of a cube of tetrahedra shared by four cells, material_hull ray tracer, method ray_trace: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"corner\"",
+      "ray_tracer=\"material_hull\"",
+      "method=\"ray_trace\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_corner_material_hull_ray_trace",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.0100698335,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on the corner (0.032, 0.032, 0.032) of a cube of tetrahedra, shared by four cells, cell_walk ray tracer, method sweep: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"far_corner\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_far_corner_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.0154687984,
+        "abs_tol": 0.005
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on the corner (0.032, 0.032, 0.032) of a cube of tetrahedra, shared by four cells, material_hull ray tracer, method sweep: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"far_corner\"",
+      "ray_tracer=\"material_hull\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_far_corner_material_hull_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.0154687984,
+        "abs_tol": 0.005
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on the corner (0.032, 0.032, 0.032) of a cube of tetrahedra, shared by four cells, material_hull ray tracer, method ray_trace: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"far_corner\"",
+      "ray_tracer=\"material_hull\"",
+      "method=\"ray_trace\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_far_corner_material_hull_ray_trace",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.010697306,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on a boundary edge of a box of hexahedra, shared by two cells, cell_walk ray tracer, method ray_trace: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"edge\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"ray_trace\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_edge_cell_walk_ray_trace",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.00528770085,
+        "abs_tol": 0.002
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_boundary_shared_source.py",
+    "comment": "Source on a boundary edge of a box of hexahedra, shared by two cells, material_hull ray tracer, method sweep: point kernel, outflow against the escape probability, balance",
+    "num_procs": 1,
+    "args": [
+      "location=\"edge\"",
+      "ray_tracer=\"material_hull\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_boundary_shared_source_edge_material_hull_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceOutflowRelativeError=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0001
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "BoundarySharedSourceMaxRelativeError=",
+        "goldvalue": 0.00848767297,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
       }
     ]
   },

@@ -12,7 +12,7 @@ if "opensn_console" not in globals():
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../")))
     from pyopensn.logvol import RPPLogicalVolume
     from pyopensn.mesh import OrthogonalMeshGenerator
-    from pyopensn.solver import UncollidedProblem
+    from pyopensn.solver import UncollidedProblem, UncollidedSolver
     from pyopensn.source import PointSource
     from pyopensn.xs import MultiGroupXS
 
@@ -93,7 +93,33 @@ if __name__ == "__main__":
     except Exception as error:
         two_dimensional_rejected = "only three-dimensional meshes are supported" in str(error)
 
+    # A source on the boundary may be shared by several cells, but the material-hull ray tracer
+    # needs one material at the source. This source is on the boundary face x = -1, on the edge
+    # between a cell of block 0 and a cell of block 1.
+    two_block_grid = OrthogonalMeshGenerator(node_sets=[[-1.0, 0.0, 1.0]] * 3).Execute()
+    two_block_grid.SetUniformBlockID(0)
+    two_block_grid.SetBlockIDFromLogicalVolume(
+        RPPLogicalVolume(infx=True, ymin=0.0, ymax=2.0, infz=True), 1, True
+    )
+    hull_interface_source_rejected = False
+    try:
+        problem = UncollidedProblem(
+            mesh=two_block_grid,
+            num_groups=1,
+            groupsets=[{"groups_from_to": [0, 0]}],
+            xs_map=[{"block_ids": [0, 1], "xs": xs}],
+            point_sources=[PointSource(location=[-1.0, 0.0, 0.3], strength=[1.0])],
+            method="ray_trace",
+            ray_tracer="material_hull",
+        )
+        solver = UncollidedSolver(problem=problem, file_name="uncollided_input_rejections.h5")
+        solver.Initialize()
+        solver.Execute()
+    except Exception as error:
+        hull_interface_source_rejected = "interface between two materials" in str(error)
+
     if rank == 0:
+        print(f"UncollidedHullInterfaceSourceRejected={int(hull_interface_source_rejected)}")
         print(f"UncollidedMissingPointSourceRejected={int(missing_point_source_rejected)}")
         print(f"UncollidedNearSourceMismatchRejected={int(near_source_mismatch_rejected)}")
         print(f"UncollidedFaceOrVertexSourceRejected={int(face_or_vertex_source_rejected)}")
@@ -107,6 +133,10 @@ if __name__ == "__main__":
     if not face_or_vertex_source_rejected:
         raise RuntimeError(
             "Uncollided generation accepted a point source on a face, edge, or vertex."
+        )
+    if not hull_interface_source_rejected:
+        raise RuntimeError(
+            "The material-hull ray tracer accepted a point source on a material interface."
         )
     if not two_dimensional_rejected:
         raise RuntimeError("Uncollided generation accepted a two-dimensional mesh.")
