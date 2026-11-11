@@ -1605,6 +1605,102 @@ UncollidedProblem::ProjectReflectedImageSources(const unsigned int progress_inte
 }
 
 void
+UncollidedProblem::CorrectCellBalance(const std::uint64_t cell_global_id,
+                                      const std::vector<FaceOrientation>& orientations,
+                                      const std::vector<bool>& vacuum_boundary_faces,
+                                      const std::vector<double>& sigma_t,
+                                      const std::vector<double>& projected_integral,
+                                      std::vector<double>& source,
+                                      std::vector<std::vector<double>>& leakage,
+                                      std::vector<double>& alpha,
+                                      std::vector<char>& leakage_fallback,
+                                      ConservationSummary& summary,
+                                      double& out_flow) const
+{
+  constexpr auto FOINCOMING = FaceOrientation::INCOMING;
+  constexpr auto FOOUTGOING = FaceOrientation::OUTGOING;
+  const size_t cell_num_faces = orientations.size();
+  bool cell_current_mismatched = false;
+
+  // Incoming leakage contributes to the available cell source.
+  for (size_t f = 0; f < cell_num_faces; ++f)
+    if (orientations[f] == FOINCOMING)
+      for (size_t g = 0; g < num_groups_; ++g)
+        source[g] += leakage[f][g];
+
+  alpha.assign(num_groups_, 1.0);
+  leakage_fallback.assign(num_groups_, 0);
+  for (size_t g = 0; g < num_groups_; ++g)
+  {
+    double outgoing_leakage = 0.0;
+    for (size_t f = 0; f < cell_num_faces; ++f)
+      if (orientations[f] == FOOUTGOING)
+        outgoing_leakage += leakage[f][g];
+
+    const double raw_removal = outgoing_leakage + sigma_t[g] * projected_integral[g];
+    const double removal_tolerance = 1.0e-12 * std::abs(source[g]);
+    OpenSnLogicalErrorIf(not std::isfinite(raw_removal) or raw_removal < -removal_tolerance,
+                         GetName() +
+                           ": near-source ray tracing produced an invalid removal for "
+                           "cell " +
+                           std::to_string(cell_global_id) + ", group " + std::to_string(g) + ".");
+
+    const bool use_leakage_fallback = raw_removal <= removal_tolerance and source[g] > 0.0;
+    alpha[g] = use_leakage_fallback ? 1.0 : (raw_removal > 0.0 ? source[g] / raw_removal : 1.0);
+    leakage_fallback[g] = use_leakage_fallback ? 1 : 0;
+    OpenSnLogicalErrorIf(not std::isfinite(alpha[g]) or alpha[g] < 0.0,
+                         GetName() +
+                           ": near-source conservation produced an invalid scale "
+                           "factor for cell " +
+                           std::to_string(cell_global_id) + ", group " + std::to_string(g) + ".");
+
+    const double relative_change = std::abs(alpha[g] - 1.0);
+    constexpr double significant_relative_change = 0.01;
+    if (relative_change > significant_relative_change)
+    {
+      cell_current_mismatched = true;
+      ++summary.mismatched_cell_group_count;
+      summary.original_outgoing_sum += raw_removal;
+      summary.outgoing_change_sum += relative_change * raw_removal;
+      summary.max_relative_outgoing_change =
+        std::max(summary.max_relative_outgoing_change, relative_change);
+    }
+
+    if (use_leakage_fallback)
+    {
+      // The removal vanishes although the cell has a source: the outgoing faces share the
+      // source equally.
+      size_t outgoing_face_count = 0;
+      for (size_t f = 0; f < cell_num_faces; ++f)
+        if (orientations[f] == FOOUTGOING)
+          ++outgoing_face_count;
+      OpenSnLogicalErrorIf(outgoing_face_count == 0,
+                           GetName() + ": near-source cell " + std::to_string(cell_global_id) +
+                             " has a positive source but no outgoing face.");
+
+      const double face_share = source[g] / static_cast<double>(outgoing_face_count);
+      for (size_t f = 0; f < cell_num_faces; ++f)
+        if (orientations[f] == FOOUTGOING)
+          leakage[f][g] = face_share;
+    }
+    else
+    {
+      // Apply the shared correction to the leakage.
+      for (size_t f = 0; f < cell_num_faces; ++f)
+        if (orientations[f] == FOOUTGOING)
+          leakage[f][g] *= alpha[g];
+    }
+
+    for (size_t f = 0; f < cell_num_faces; ++f)
+      if (vacuum_boundary_faces[f] and orientations[f] == FOOUTGOING)
+        out_flow += leakage[f][g];
+  }
+
+  if (cell_current_mismatched)
+    ++summary.mismatched_cell_count;
+}
+
+void
 UncollidedProblem::TraceNearSourceCell(RayTracer& ray_tracer,
                                        const SourcePoint& source_point,
                                        const size_t c,
@@ -1850,11 +1946,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   constexpr auto FOINCOMING = FaceOrientation::INCOMING;
   constexpr auto FOOUTGOING = FaceOrientation::OUTGOING;
 
-  size_t mismatched_cell_count = 0;
-  size_t mismatched_cell_group_count = 0;
-  double original_outgoing_sum = 0.0;
-  double outgoing_change_sum = 0.0;
-  double max_relative_outgoing_change = 0.0;
+  ConservationSummary summary;
 
   // Total fraction of the source emitted into the source cells.
   double source_angle_fraction = 0.0;
@@ -1947,7 +2039,6 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
     const size_t c = near_spls_[n];
     auto& raw = raw_cells[n];
     const Cell& cell = grid_->GetLocalCell(c);
-    bool cell_current_mismatched = false;
 
     const auto& cell_mapping = sdm.GetCellMapping(cell);
     const size_t cell_num_faces = cell.faces.size();
@@ -2006,89 +2097,48 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
         source[g] += strength[g] * angle_fraction;
     }
 
-    // Incoming leakage contributes to the available cell source.
-    for (size_t f = 0; f < cell_num_faces; ++f)
-      if (cell_face_orientations_[c][f] == FOINCOMING)
-        for (size_t g = 0; g < num_groups_; ++g)
-          source[g] += cell_leakage[f][g];
+    // Integral of the projected flux, before the correction.
+    std::vector<double> projected_integral(num_groups_, 0.0);
+    for (size_t g = 0; g < num_groups_; ++g)
+      for (size_t i = 0; i < cell_num_nodes; ++i)
+        projected_integral[g] += IntV_shapeI(i) * phi[g](i);
 
-    // Apply the cell-wise correction from Woodsford et al. (2026), Eqs. (24)-(25).
+    std::vector<bool> vacuum_boundary_faces(cell_num_faces, false);
+    for (size_t f = 0; f < cell_num_faces; ++f)
+      vacuum_boundary_faces[f] =
+        not cell.faces[f].has_neighbor and not IsReflectingBoundary(cell.faces[f].neighbor_id);
+
+    // Apply the cell-wise correction from Woodsford et al. (2026), Eqs. (24)-(25), to the
+    // leakages, then to the flux and to the bulk interface source.
+    std::vector<double> alpha;
+    std::vector<char> leakage_fallback;
+    CorrectCellBalance(cell.global_id,
+                       cell_face_orientations_[c],
+                       vacuum_boundary_faces,
+                       sigma_t,
+                       projected_integral,
+                       source,
+                       cell_leakage,
+                       alpha,
+                       leakage_fallback,
+                       summary,
+                       out_flow_);
     for (size_t g = 0; g < num_groups_; ++g)
     {
-      double outgoing_leakage = 0.0;
-      for (size_t f = 0; f < cell_num_faces; ++f)
-        if (cell_face_orientations_[c][f] == FOOUTGOING)
-          outgoing_leakage += cell_leakage[f][g];
-
-      double projected_integral = 0.0;
-      for (size_t i = 0; i < cell_num_nodes; ++i)
-        projected_integral += IntV_shapeI(i) * phi[g](i);
-      const double raw_removal = outgoing_leakage + sigma_t[g] * projected_integral;
-      const double removal_tolerance = 1.0e-12 * std::abs(source[g]);
-      OpenSnLogicalErrorIf(not std::isfinite(raw_removal) or raw_removal < -removal_tolerance,
-                           GetName() +
-                             ": near-source ray tracing produced an invalid removal for "
-                             "cell " +
-                             std::to_string(cell.global_id) + ", group " + std::to_string(g) + ".");
-
-      const bool use_leakage_fallback = raw_removal <= removal_tolerance and source[g] > 0.0;
-      const double alpha =
-        use_leakage_fallback ? 1.0 : (raw_removal > 0.0 ? source[g] / raw_removal : 1.0);
-      OpenSnLogicalErrorIf(not std::isfinite(alpha) or alpha < 0.0,
-                           GetName() +
-                             ": near-source conservation produced an invalid scale "
-                             "factor for cell " +
-                             std::to_string(cell.global_id) + ", group " + std::to_string(g) + ".");
-      phi[g].Scale(alpha);
-
-      const double relative_change = std::abs(alpha - 1.0);
-      constexpr double significant_relative_change = 0.01;
-      if (relative_change > significant_relative_change)
+      phi[g].Scale(alpha[g]);
+      if (leakage_fallback[g] != 0)
       {
-        cell_current_mismatched = true;
-        ++mismatched_cell_group_count;
-        original_outgoing_sum += raw_removal;
-        outgoing_change_sum += relative_change * raw_removal;
-        max_relative_outgoing_change = std::max(max_relative_outgoing_change, relative_change);
-      }
-
-      if (use_leakage_fallback)
-      {
-        size_t outgoing_face_count = 0;
-        for (size_t f = 0; f < cell_num_faces; ++f)
-          if (cell_face_orientations_[c][f] == FOOUTGOING)
-            ++outgoing_face_count;
-        OpenSnLogicalErrorIf(outgoing_face_count == 0,
-                             GetName() + ": near-source cell " + std::to_string(cell.global_id) +
-                               " has a positive source but no outgoing face.");
-
+        // The outgoing faces share the source equally, as a uniform face flux.
         for (auto& [jr, rhs_g] : cell_bulk_rhs)
           rhs_g[g] = 0.0;
-
-        const double face_share = source[g] / static_cast<double>(outgoing_face_count);
         for (size_t f = 0; f < cell_num_faces; ++f)
           if (cell_face_orientations_[c][f] == FOOUTGOING)
-          {
-            cell_leakage[f][g] = face_share;
             for (const auto& [jr, weight] : bulk_face_rhs_weights[f])
-              cell_bulk_rhs[jr][g] += face_share * weight;
-          }
+              cell_bulk_rhs[jr][g] += cell_leakage[f][g] * weight;
       }
       else
-      {
-        // Apply the shared correction to leakage and the bulk interface source.
-        for (size_t f = 0; f < cell_num_faces; ++f)
-          if (cell_face_orientations_[c][f] == FOOUTGOING)
-            cell_leakage[f][g] *= alpha;
         for (auto& [jr, rhs_g] : cell_bulk_rhs)
-          rhs_g[g] *= alpha;
-      }
-
-      for (size_t f = 0; f < cell_num_faces; ++f)
-        if (not cell.faces[f].has_neighbor and
-            not IsReflectingBoundary(cell.faces[f].neighbor_id) and
-            cell_face_orientations_[c][f] == FOOUTGOING)
-          out_flow_ += cell_leakage[f][g];
+          rhs_g[g] *= alpha[g];
     }
 
     // The bulk sweep receives the analytic ray-traced interface current.
@@ -2103,9 +2153,6 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
       for (size_t g = 0; g < num_groups_; ++g)
         destination_phi_[ir * num_groups_ + g] = phi[g](i);
     }
-
-    if (cell_current_mismatched)
-      ++mismatched_cell_count;
   }
 
   // A source on the domain boundary emits part of its strength directly out of the domain.
@@ -2126,22 +2173,25 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   const double mismatched_cell_fraction =
     near_spls_.empty()
       ? 0.0
-      : static_cast<double>(mismatched_cell_count) / static_cast<double>(near_spls_.size());
+      : static_cast<double>(summary.mismatched_cell_count) / static_cast<double>(near_spls_.size());
   const double aggregate_relative_change =
-    original_outgoing_sum > 0.0 ? outgoing_change_sum / original_outgoing_sum : 0.0;
+    summary.original_outgoing_sum > 0.0
+      ? summary.outgoing_change_sum / summary.original_outgoing_sum
+      : 0.0;
   log.Log() << std::setprecision(6) << std::scientific
-            << "Near-source consistency: " << mismatched_cell_count << " / " << near_spls_.size()
-            << " cells required a conservation correction greater than 1%"
+            << "Near-source consistency: " << summary.mismatched_cell_count << " / "
+            << near_spls_.size() << " cells required a conservation correction greater than 1%"
             << " (aggregate correction " << aggregate_relative_change << ").";
   log.Log0Verbose1() << " Near-source conservation correction:\n"
-                     << "  Corrected cells             = " << mismatched_cell_count << " / "
+                     << "  Corrected cells             = " << summary.mismatched_cell_count << " / "
                      << near_spls_.size() << "\n"
-                     << "  Corrected cell-group pairs  = " << mismatched_cell_group_count << " / "
-                     << near_source_pair_count << "\n"
+                     << "  Corrected cell-group pairs  = " << summary.mismatched_cell_group_count
+                     << " / " << near_source_pair_count << "\n"
                      << std::setprecision(6) << std::scientific
                      << "  Mismatched cell fraction     = " << mismatched_cell_fraction << "\n"
                      << "  Aggregate relative mismatch  = " << aggregate_relative_change << "\n"
-                     << "  Maximum relative mismatch    = " << max_relative_outgoing_change << "\n"
+                     << "  Maximum relative mismatch    = " << summary.max_relative_outgoing_change
+                     << "\n"
                      << " NearSourceCurrentMismatchedCellFraction=" << mismatched_cell_fraction
                      << "\n"
                      << " NearSourceCurrentAggregateRelativeMismatch=" << aggregate_relative_change

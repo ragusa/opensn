@@ -142,6 +142,55 @@ protected:
     bool integrated_exactly = false;
   };
 
+  /// Totals of the conservation correction over the ray-traced cells of a source.
+  struct ConservationSummary
+  {
+    /// Cells, and cell-group pairs, corrected by more than 1%.
+    size_t mismatched_cell_count = 0;
+    size_t mismatched_cell_group_count = 0;
+    /// Uncorrected removal of the pairs corrected by more than 1%, and that removal weighted by
+    /// the relative correction.
+    double original_outgoing_sum = 0.0;
+    double outgoing_change_sum = 0.0;
+    double max_relative_outgoing_change = 0.0;
+  };
+
+  /**
+   * Conservation correction of one ray-traced cell, Eqs. (24)-(25) of Woodsford et al. (2026).
+   *
+   * In each group, the leakage out of the cell and the removal in it are scaled by
+   * alpha = (source + inflow) / (outflow + sigma_t * integral of the projected flux), so that
+   * the cell balance closes. When the denominator vanishes although the numerator does not,
+   * alpha is one and the outgoing faces share the numerator equally.
+   *
+   * @param orientations Orientation of each face with respect to the source.
+   * @param vacuum_boundary_faces True for the boundary faces that are not reflecting.
+   * @param sigma_t Total cross section of the cell, by group.
+   * @param projected_integral Integral of the projected flux over the cell, by group.
+   * @param source In: rate at which the point source emits into the cell, by group. Out: that
+   *        rate plus the leakage into the cell.
+   * @param leakage Indexed [face][group]. In: the corrected leakage of the upwind cell on the
+   *        incoming faces and the ray-traced leakage on the outgoing faces. Out: the outgoing
+   *        faces hold the corrected leakage.
+   * @param alpha Out: scale factor to apply to the flux of the cell, by group.
+   * @param leakage_fallback Out: nonzero for the groups in which the outgoing faces share the
+   *        source equally.
+   * @param summary Totals to which this cell is added.
+   * @param out_flow Total to which the corrected leakage through the vacuum boundary faces is
+   *        added.
+   */
+  void CorrectCellBalance(std::uint64_t cell_global_id,
+                          const std::vector<FaceOrientation>& orientations,
+                          const std::vector<bool>& vacuum_boundary_faces,
+                          const std::vector<double>& sigma_t,
+                          const std::vector<double>& projected_integral,
+                          std::vector<double>& source,
+                          std::vector<std::vector<double>>& leakage,
+                          std::vector<double>& alpha,
+                          std::vector<char>& leakage_fallback,
+                          ConservationSummary& summary,
+                          double& out_flow) const;
+
   /**
    * Ray traces the near-source region of a source and enforces conservation cell by cell.
    *
