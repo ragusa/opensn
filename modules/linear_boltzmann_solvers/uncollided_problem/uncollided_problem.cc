@@ -19,10 +19,12 @@
 #include "framework/runtime.h"
 #include "caliper/cali.h"
 #include <boost/graph/topological_sort.hpp>
+#include <cctype>
 #include <chrono>
 #include <iomanip>
 #include <numeric>
 #include <queue>
+#include <sstream>
 #include <utility>
 #include <unordered_map>
 #include <cmath>
@@ -173,6 +175,34 @@ UncollidedProblem::GetInputParameters()
                                  AllowableRangeList::New({"bvh", "brute_force"}));
 
   params.AddOptionalParameter(
+    "hull_tracer_leaf_size",
+    4,
+    "Largest number of triangles in a leaf of the bounding volume hierarchy of "
+    "hull_tracer_backend = \"bvh\". Smaller leaves trade segment-triangle tests for "
+    "segment-box tests.");
+  params.ConstrainParameterRange("hull_tracer_leaf_size", AllowableRangeLowHighLimit::New(1, 64));
+
+  params.AddOptionalParameter(
+    "hull_tracer_search",
+    "segment",
+    "How the material-hull ray tracer finds the triangles a path can cross. \"segment\" searches "
+    "the hull for every path. \"cell_shaft\" searches it once for all the paths from a cell to "
+    "a source and tests each path against the triangles found. \"source_directions\" bins "
+    "the triangles by direction seen from each source, and a path tests the triangles of its "
+    "direction. The crossings, and so the results, are the same. Paths to the images of a "
+    "source in reflecting boundaries always use \"segment\".");
+  params.ConstrainParameterRange(
+    "hull_tracer_search", AllowableRangeList::New({"segment", "cell_shaft", "source_directions"}));
+
+  params.AddOptionalParameter(
+    "hull_tracer_direction_bins",
+    256,
+    "Number of bins along each side of the six faces of the direction grid of "
+    "hull_tracer_search = \"source_directions\".");
+  params.ConstrainParameterRange("hull_tracer_direction_bins",
+                                 AllowableRangeLowHighLimit::New(1, 4096));
+
+  params.AddOptionalParameter(
     "hull_tracer_statistics",
     false,
     "Report the work of the material-hull ray tracer: the number of paths, of segment-box and "
@@ -280,6 +310,13 @@ UncollidedProblem::UncollidedProblem(const InputParameters& params)
                        : RayTracerType::CELL_WALK),
     hull_tracer_backend_(params.GetParamValue<std::string>("hull_tracer_backend")),
     ray_trace_all_cells_(params.GetParamValue<std::string>("method") == "ray_trace"),
+    hull_search_(params.GetParamValue<std::string>("hull_tracer_search") == "cell_shaft"
+                   ? HullSearch::CELL_SHAFT
+                   : (params.GetParamValue<std::string>("hull_tracer_search") == "source_directions"
+                        ? HullSearch::SOURCE_DIRECTIONS
+                        : HullSearch::SEGMENT)),
+    hull_direction_bins_(params.GetParamValue<unsigned int>("hull_tracer_direction_bins")),
+    hull_leaf_size_(params.GetParamValue<unsigned int>("hull_tracer_leaf_size")),
     hull_tracer_statistics_(params.GetParamValue<bool>("hull_tracer_statistics")),
     ell_max_(params.GetParamValue<size_t>("scattering_order")),
     exact_near_source_leakage_(params.GetParamValue<bool>("exact_near_source_leakage"))
@@ -1468,7 +1505,9 @@ UncollidedProblem::BuildMaterialHull()
 
   Timer timer;
   hull_ = MaterialHull::Extract(*grid_);
-  hull_tracer_ = SegmentTracer::Create(hull_tracer_backend_, hull_);
+  hull_tracer_ = SegmentTracer::Create(hull_tracer_backend_, hull_, hull_leaf_size_);
+  static std::atomic<std::uint64_t> num_hulls_built = 0;
+  hull_generation_ = ++num_hulls_built;
 
   // Total cross section of each hull material; the exterior, the last material, is a void.
   const std::uint32_t num_materials = hull_->GetNumMaterials();
@@ -1573,6 +1612,31 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
   const Vector3 unfolded_direction = source_point.location - qp_xyz;
   HullStatistics& statistics = ThreadHullStatistics();
   ++statistics.paths;
+  const auto Now = [this]()
+  {
+    return hull_tracer_statistics_ ? std::chrono::steady_clock::now()
+                                   : std::chrono::steady_clock::time_point();
+  };
+  const auto Elapsed = [this](const std::chrono::steady_clock::time_point start) -> std::uint64_t
+  {
+    if (not hull_tracer_statistics_)
+      return 0;
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                                                start)
+      .count();
+  };
+
+  // An unfolded path runs from the cell to the source, so the candidates of the cell hold
+  // every triangle it can cross.
+  const HullCandidateCache* candidates = nullptr;
+  if (hull_search_ == HullSearch::CELL_SHAFT and source_point.reflection_planes.empty())
+  {
+    const auto start = Now();
+    candidates = &GetHullCandidates(cell, source_point);
+    const std::uint64_t elapsed = Elapsed(start);
+    statistics.search_time += elapsed;
+    statistics.collection_time += elapsed;
+  }
 
   bool consistent = false;
   double total_length = 0.0;
@@ -1597,19 +1661,34 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
     if (attempt > 0)
       ++hull_retraced_segments_;
 
-    if (hull_tracer_statistics_)
+    const auto start = Now();
+    // The direction grid is that of one physical source and its unfolded paths.
+    const DirectionGridTracer* direction_grid = hull_direction_grid_.get();
+    if (direction_grid != nullptr and (not source_point.reflection_planes.empty() or
+                                       direction_grid->GetApex().x != source_point.location.x or
+                                       direction_grid->GetApex().y != source_point.location.y or
+                                       direction_grid->GetApex().z != source_point.location.z))
+      direction_grid = nullptr;
+    // The candidates are those of the paths that start in the box of the cell and end at the
+    // source. Any other path searches the hull itself.
+    bool in_shaft = candidates != nullptr and pieces.size() == 1;
+    if (in_shaft)
     {
-      const auto start = std::chrono::steady_clock::now();
-      hull_tracer_->Trace(
-        pieces, source_point.hull_excluded_triangles, crossings, statistics.counters);
-      statistics.search_time +=
-        static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                     std::chrono::steady_clock::now() - start)
-                                     .count());
+      const Vector3& piece_start = pieces.front().start;
+      const Vector3 end_offset = pieces.front().end - candidates->apex;
+      in_shaft = piece_start.x >= candidates->lower.x and piece_start.x <= candidates->upper.x and
+                 piece_start.y >= candidates->lower.y and piece_start.y <= candidates->upper.y and
+                 piece_start.z >= candidates->lower.z and piece_start.z <= candidates->upper.z and
+                 end_offset.Norm() <= 1.0e-12 * hull_->GetSize();
     }
+    if (direction_grid != nullptr)
+      direction_grid->Trace(pieces, crossings, statistics.counters);
+    else if (in_shaft)
+      hull_tracer_->TraceCandidates(pieces, candidates->candidates, crossings, statistics.counters);
     else
       hull_tracer_->Trace(
         pieces, source_point.hull_excluded_triangles, crossings, statistics.counters);
+    statistics.search_time += Elapsed(start);
 
     // The material at the end of the last piece is that of the source. The material at the
     // start of a piece is the material at the end of the piece before it.
@@ -1663,6 +1742,65 @@ UncollidedProblem::ComputeHullOpticalDepth(const Cell& cell,
         optical_depth[g] += hull_sigma_t_[m][g] * lengths[m];
 }
 
+const UncollidedProblem::HullCandidateCache&
+UncollidedProblem::GetHullCandidates(const Cell& cell, const SourcePoint& source_point)
+{
+  thread_local HullCandidateCache cache;
+  const Vector3& apex = source_point.location;
+  if (cache.hull_generation == hull_generation_ and cache.cell_local_id == cell.local_id and
+      cache.apex.x == apex.x and cache.apex.y == apex.y and cache.apex.z == apex.z)
+    return cache;
+
+  // The box of the vertices of the cell holds its quadrature points. It is enlarged so that a
+  // start point displaced by DisplaceStartPoint stays in it.
+  constexpr double max_value = std::numeric_limits<double>::max();
+  Vector3 lower(max_value, max_value, max_value);
+  Vector3 upper(-max_value, -max_value, -max_value);
+  for (const auto vertex_id : cell.vertex_ids)
+  {
+    const Vector3& vertex = grid_->GlobalVertex(vertex_id);
+    lower = Vector3(
+      std::min(lower.x, vertex.x), std::min(lower.y, vertex.y), std::min(lower.z, vertex.z));
+    upper = Vector3(
+      std::max(upper.x, vertex.x), std::max(upper.y, vertex.y), std::max(upper.z, vertex.z));
+  }
+  const double padding = 1.0e-8 * (upper - lower).Norm();
+  cache.lower = lower - Vector3(padding, padding, padding);
+  cache.upper = upper + Vector3(padding, padding, padding);
+  cache.hull_generation = hull_generation_;
+  cache.cell_local_id = cell.local_id;
+  cache.apex = apex;
+  hull_tracer_->CollectCandidates(cache.lower,
+                                  cache.upper,
+                                  apex,
+                                  source_point.hull_excluded_triangles,
+                                  cache.candidates,
+                                  ThreadHullStatistics().counters);
+  return cache;
+}
+
+void
+UncollidedProblem::BuildHullDirectionGrid(const SourcePoint& source_point)
+{
+  const auto start = std::chrono::steady_clock::now();
+  hull_direction_grid_ =
+    std::make_unique<const DirectionGridTracer>(hull_tracer_,
+                                                source_point.location,
+                                                source_point.hull_excluded_triangles,
+                                                hull_direction_bins_);
+  const std::scoped_lock lock(hull_statistics_mutex_);
+  ++hull_statistics_.counters.candidate_sets;
+  hull_statistics_.counters.candidate_triangles += hull_direction_grid_->GetNumEntries();
+  if (hull_tracer_statistics_)
+  {
+    const auto elapsed = static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start)
+        .count());
+    hull_statistics_.search_time += elapsed;
+    hull_statistics_.collection_time += elapsed;
+  }
+}
+
 UncollidedProblem::HullStatistics&
 UncollidedProblem::ThreadHullStatistics()
 {
@@ -1682,26 +1820,25 @@ UncollidedProblem::FlushHullThreadStatistics()
 void
 UncollidedProblem::ReportHullStatistics()
 {
-  const auto Sum = [](std::uint64_t& value)
+  std::ostringstream report;
+  report << "Material-hull tracer statistics, summed over the ranks and threads:\n";
+  for (const auto& [name, value] : hull_statistics_.Entries())
   {
     if (opensn::mpi_comm.size() > 1)
-      opensn::mpi_comm.all_reduce(value, mpi::op::sum<std::uint64_t>());
-  };
-  Sum(hull_statistics_.paths);
-  Sum(hull_statistics_.counters.segments);
-  Sum(hull_statistics_.counters.box_tests);
-  Sum(hull_statistics_.counters.triangle_tests);
-  Sum(hull_statistics_.counters.crossings);
-  Sum(hull_statistics_.search_time);
-
-  log.Log() << "Material-hull tracer statistics, summed over the ranks and threads:\n"
-            << " Paths                    = " << hull_statistics_.paths << "\n"
-            << " Segments                 = " << hull_statistics_.counters.segments << "\n"
-            << " Box tests                = " << hull_statistics_.counters.box_tests << "\n"
-            << " Triangle tests           = " << hull_statistics_.counters.triangle_tests << "\n"
-            << " Crossings                = " << hull_statistics_.counters.crossings << "\n"
-            << " Search time (s)          = " << std::fixed << std::setprecision(3)
-            << 1.0e-9 * static_cast<double>(hull_statistics_.search_time) << "\n";
+      opensn::mpi_comm.all_reduce(*value, mpi::op::sum<std::uint64_t>());
+    std::string label(name);
+    label[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(label[0])));
+    const bool is_time = label.ends_with("time");
+    if (is_time)
+      label += " (s)";
+    report << " " << std::left << std::setw(25) << label << "= ";
+    if (is_time)
+      report << std::fixed << std::setprecision(3) << 1.0e-9 * static_cast<double>(*value);
+    else
+      report << *value;
+    report << "\n";
+  }
+  log.Log() << report.str();
 }
 
 void
@@ -2600,6 +2737,9 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   }
 
   Timer phase_timer;
+  if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL and
+      hull_search_ == HullSearch::SOURCE_DIRECTIONS)
+    BuildHullDirectionGrid(source_point);
   // Trace every near-source cell. The ray-traced data of a cell does not depend on the other
   // cells, so the cells are shared among the threads; each thread writes to the cells it takes.
   const size_t num_near_cells = near_spls_.size();
@@ -2646,6 +2786,7 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
       std::rethrow_exception(worker_exception);
   }
 
+  hull_direction_grid_.reset();
   timings_.ray_tracing += phase_timer.GetTime() / 1000.0;
   phase_timer.Reset();
 
@@ -3466,17 +3607,17 @@ UncollidedProblem::WriteDiagnostics(const std::string& file_name) const
       }
       if (written and hull_tracer_statistics_ and ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
       {
-        const auto& counters = hull_statistics_.counters;
-        written =
-          H5CreateAttribute<uint64_t>(file, "hull tracer paths", hull_statistics_.paths) and
-          H5CreateAttribute<uint64_t>(file, "hull tracer segments", counters.segments) and
-          H5CreateAttribute<uint64_t>(file, "hull tracer box tests", counters.box_tests) and
-          H5CreateAttribute<uint64_t>(
-            file, "hull tracer triangle tests", counters.triangle_tests) and
-          H5CreateAttribute<uint64_t>(file, "hull tracer crossings", counters.crossings) and
-          H5CreateAttribute<double>(file,
-                                    "hull tracer search time",
-                                    1.0e-9 * static_cast<double>(hull_statistics_.search_time));
+        // WriteDiagnostics is const; Entries only hands out the values here.
+        auto statistics = hull_statistics_;
+        for (const auto& [name, value] : statistics.Entries())
+        {
+          const std::string attribute = "hull tracer " + std::string(name);
+          if (attribute.ends_with("time"))
+            written = written and H5CreateAttribute<double>(
+                                    file, attribute, 1.0e-9 * static_cast<double>(*value));
+          else
+            written = written and H5CreateAttribute<uint64_t>(file, attribute, *value);
+        }
       }
       OpenSnLogicalErrorIf(not written,
                            GetName() + ": failed to write the uncollided diagnostics file.");

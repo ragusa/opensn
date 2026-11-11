@@ -9,12 +9,14 @@
 #include "framework/mesh/logical_volume/logical_volume.h"
 #include "framework/mesh/raytrace/material_hull.h"
 #include "framework/mesh/raytrace/raytracer.h"
+#include "framework/mesh/raytrace/direction_grid_tracer.h"
 #include "framework/mesh/raytrace/segment_tracer.h"
 #include "framework/mesh/mesh/cell.h"
 #include "framework/data_types/dense_matrix.h"
 #include "framework/data_types/vector.h"
 #include "framework/data_types/vector3.h"
 #include "hdf5.h"
+#include <array>
 #include <atomic>
 #include <mutex>
 #include <optional>
@@ -98,6 +100,18 @@ protected:
     CELL_WALK,
     /// Intersect the path with the material hull of the mesh.
     MATERIAL_HULL
+  };
+
+  /// How the material-hull ray tracer searches the hull for the triangles a path can cross.
+  enum class HullSearch
+  {
+    /// Every path searches the hierarchy of the tracer.
+    SEGMENT,
+    /// The hierarchy is searched once for the paths from a cell to a source.
+    CELL_SHAFT,
+    /// The triangles are binned by direction seen from the source, and a path tests those of
+    /// its direction.
+    SOURCE_DIRECTIONS
   };
 
   enum class CellRegion
@@ -225,15 +239,52 @@ protected:
     /// Time spent searching the hull for the crossings of the paths, in nanoseconds and summed
     /// over the threads. Measured only with hull_tracer_statistics.
     std::uint64_t search_time = 0;
+    /// Part of the search time spent collecting candidate sets.
+    std::uint64_t collection_time = 0;
 
     HullStatistics& operator+=(const HullStatistics& other)
     {
       paths += other.paths;
       counters += other.counters;
       search_time += other.search_time;
+      collection_time += other.collection_time;
       return *this;
     }
+
+    /// The statistics by name, in the order they are reported.
+    std::array<std::pair<const char*, std::uint64_t*>, 10> Entries()
+    {
+      return {{{"paths", &paths},
+               {"segments", &counters.segments},
+               {"box tests", &counters.box_tests},
+               {"triangle tests", &counters.triangle_tests},
+               {"crossings", &counters.crossings},
+               {"candidate sets", &counters.candidate_sets},
+               {"candidate box tests", &counters.candidate_box_tests},
+               {"candidate triangles", &counters.candidate_triangles},
+               {"search time", &search_time},
+               {"collection time", &collection_time}}};
+    }
   };
+
+  /// Candidate triangles of the paths from one cell to one source, kept by each thread.
+  struct HullCandidateCache
+  {
+    /// The hull, cell and source the candidates are for.
+    std::uint64_t hull_generation = 0;
+    std::uint64_t cell_local_id = 0;
+    Vector3 apex;
+    /// Box that holds the cell.
+    Vector3 lower;
+    Vector3 upper;
+    std::vector<std::uint32_t> candidates;
+  };
+
+  /**
+   * Returns the candidate triangles of the paths from a cell to a physical source, collecting
+   * them when the calling thread last asked for another cell or source.
+   */
+  const HullCandidateCache& GetHullCandidates(const Cell& cell, const SourcePoint& source_point);
 
   /// The statistics that the calling thread gathered since its last flush.
   static HullStatistics& ThreadHullStatistics();
@@ -440,6 +491,10 @@ protected:
   /// Builds the material hull, its tracer and the hull data of the source points. Collective.
   void BuildMaterialHull();
 
+  /// Builds the direction grid of a physical source, with hull_tracer_search =
+  /// "source_directions". Not thread-safe.
+  void BuildHullDirectionGrid(const SourcePoint& source_point);
+
   /// Integrals of the uncollided flux of a point source over a cell.
   struct ExactCellIntegrals
   {
@@ -551,10 +606,21 @@ protected:
   /// True when every cell is ray traced and corrected for conservation and no cell is swept
   /// (method = "ray_trace").
   bool ray_trace_all_cells_ = false;
+  HullSearch hull_search_ = HullSearch::SEGMENT;
+  /// Number of bins along each side of a face of the direction grid.
+  unsigned int hull_direction_bins_ = 0;
+  /// Largest number of triangles in a leaf of the hierarchy of the "bvh" tracer.
+  unsigned int hull_leaf_size_ = 0;
   /// True when the work of the material-hull ray tracer is timed and reported.
   bool hull_tracer_statistics_ = false;
+  /// Identifies the hull built by the last BuildMaterialHull among all hulls of the process.
+  std::uint64_t hull_generation_ = 0;
   std::shared_ptr<const MaterialHull> hull_;
-  std::unique_ptr<SegmentTracer> hull_tracer_;
+  std::shared_ptr<const SegmentTracer> hull_tracer_;
+  /// The triangles of the hull by direction seen from the physical source being traced, with
+  /// hull_tracer_search = "source_directions".
+  std::unique_ptr<const DirectionGridTracer> hull_direction_grid_;
+
   /// Total cross section of each hull material, indexed [material][group]. The last material is
   /// the exterior, a void.
   std::vector<std::vector<double>> hull_sigma_t_;

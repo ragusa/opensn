@@ -722,13 +722,44 @@ The solver ends with the wall time spent in each phase: material hull, cell
 ordering, ray tracing, conservation correction, bulk sweep, image sources,
 balance and moments, and output.
 
-``hull_tracer_statistics=True`` on the problem adds a report of the work of the
-material-hull ray tracer, summed over the ranks and threads: the number of
-paths, of segments (a path folded at reflecting boundaries has several), of
-segment-box and segment-triangle tests and of crossings, and the time spent
-searching the hull. The search time is a sum over the threads, so it compares
-with the wall time of the ray-tracing phase only on one rank and one thread.
-The same numbers are attributes of the diagnostics file.
+Searching the material hull
+---------------------------
+
+With ``ray_tracer="material_hull"`` the cost of a path is that of finding the
+triangles of the hull it crosses. ``hull_tracer_search`` selects how they are
+found. The three choices give the same crossings and the same result to the
+last bit:
+
+* ``"segment"``, the default, searches a bounding volume hierarchy of the hull
+  for every path. ``hull_tracer_leaf_size`` sets the largest number of
+  triangles in a leaf of the hierarchy.
+* ``"cell_shaft"`` searches the hierarchy once for all the paths from a cell to
+  a source and tests each of them against every triangle found. It pays off
+  only when few triangles lie between the cell and the source.
+* ``"source_directions"`` bins the triangles by direction seen from the source,
+  on the faces of a cube centered at the source. A path tests the triangles of
+  its direction that are not farther from the source than its start point.
+  There is no search, and the number of triangle tests per path does not grow
+  with the size of the hull. ``hull_tracer_direction_bins`` sets the number of
+  bins along each side of a face of the cube. The table is built once per
+  source, which takes about as long as tracing a few thousand paths; with
+  ``method="sweep"`` and a small near-source region this can exceed what it
+  saves.
+
+Paths to the images of a source in reflecting boundaries are folded at the
+boundaries and always use ``"segment"``.
+
+``hull_tracer_statistics=True`` adds a report of the work of the tracer, summed
+over the ranks and threads: the number of paths, of segments (a path folded at
+reflecting boundaries has several), of tests against a bound of triangles (a
+box of the hierarchy, or the rectangle of a triangle in the table of
+directions), of segment-triangle tests and of crossings; the number of
+candidate sets, of box tests made to collect them and of triangles in them;
+the time spent finding the crossings and the part of it spent building the
+candidate sets. The counts do not depend on the machine, which makes them the
+measure to compare the searches with. The search time is a sum over the
+threads, so it compares with the wall time of the ray-tracing phase only on one
+rank and one thread. The same numbers are attributes of the diagnostics file.
 
 Source support
 --------------

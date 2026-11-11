@@ -1044,14 +1044,53 @@ WrapLBS(py::module& slv)
         Implementation of the ``'material_hull'`` ray tracer. ``'bvh'`` uses a
         bounding volume hierarchy. ``'brute_force'`` tests every triangle of
         the hull and is meant for verification. Ignored with ``'cell_walk'``.
+    hull_tracer_leaf_size : int, default=4
+        Largest number of triangles in a leaf of the hierarchy of
+        ``hull_tracer_backend='bvh'``, between 1 and 64. Smaller leaves trade
+        segment-triangle tests for segment-box tests.
+    hull_tracer_search : {'segment', 'cell_shaft', 'source_directions'}, default='segment'
+        How the ``'material_hull'`` ray tracer finds the triangles a path can
+        cross. The three give the same crossings, and so the same result to
+        the last bit; they differ in cost.
+
+        ``'segment'`` searches the hull for every path.
+
+        ``'cell_shaft'`` searches it once for all the paths from a cell to a
+        source, with the convex hull of the cell's bounding box and the
+        source, and tests each of these paths against every triangle found.
+        It pays off only when few triangles lie between the cell and the
+        source.
+
+        ``'source_directions'`` bins the triangles by direction seen from
+        each source, and a path tests the triangles of its direction that are
+        not farther from the source than its start point. There is no search,
+        and the number of triangle tests per path does not grow with the size
+        of the hull. It holds one table per source at a time, whose size
+        grows with ``hull_tracer_direction_bins``, and building it takes
+        about as long as tracing a few thousand paths.
+
+        Paths to the images of a source in reflecting boundaries are folded
+        and always use ``'segment'``.
+    hull_tracer_direction_bins : int, default=256
+        Number of bins along each side of the six faces of the cube of
+        directions of ``hull_tracer_search='source_directions'``, between 1
+        and 4096. More bins shorten the list a path goes through and lengthen
+        the table.
     hull_tracer_statistics : bool, default=False
         Report the work of the ``'material_hull'`` ray tracer at the end of
         :meth:`UncollidedSolver.Execute`, summed over the ranks and threads:
-        the number of paths, of segments (a path folded at reflecting
-        boundaries has several), of segment-box tests, of segment-triangle
-        tests and of crossings, and the time spent searching the hull. The
-        timing adds two clock readings per path. The same numbers are written
-        as attributes of the diagnostics file. Ignored with ``'cell_walk'``.
+        the number of paths; of segments, a path folded at reflecting
+        boundaries having several; of tests of a segment against a bound of
+        triangles, which is a box of the hierarchy or the rectangle of a
+        triangle in the table of directions; of segment-triangle tests; of
+        crossings; of candidate sets, one per cell and source with
+        ``'cell_shaft'`` and one per source and rank with
+        ``'source_directions'``; of box tests made to collect them and of
+        triangles in them; the time spent finding the crossings; and the part
+        of it spent building the candidate sets. The counts do not depend on
+        the machine. The timing adds two clock readings per path. The same
+        numbers are written as attributes of the diagnostics file. Ignored
+        with ``'cell_walk'``.
 
     Notes
     -----
@@ -2023,9 +2062,11 @@ WrapUncollidedSolver(py::module& slv)
         ``hull_tracer_statistics`` on the problem, the attributes
         ``hull tracer paths``, ``hull tracer segments``,
         ``hull tracer box tests``, ``hull tracer triangle tests``,
-        ``hull tracer crossings`` and ``hull tracer search time`` (seconds,
-        summed over the ranks and threads) hold the work of the material-hull
-        ray tracer.
+        ``hull tracer crossings``, ``hull tracer candidate sets``,
+        ``hull tracer candidate box tests``,
+        ``hull tracer candidate triangles``, ``hull tracer search time`` and
+        ``hull tracer collection time`` (seconds) hold the work of the
+        material-hull ray tracer, summed over the ranks and threads.
 
     Notes
     -----

@@ -190,6 +190,68 @@ search strategies with.
 third-party library would be a third implementation of the interface, enabled by
 its own CMake option.
 
+Segments that share their end point
+-----------------------------------
+
+The paths of an uncollided calculation all end at a source, and those from one
+cell start close to one another. Two classes use this. Both find the same
+crossings as ``Trace``, with the same triangle test, so a result does not depend
+on which is used.
+
+**Candidates of a box.** ``SegmentTracer::CollectCandidates`` returns the
+triangles that a segment from a point of a box to a point, the apex, can cross,
+and ``TraceCandidates`` tests segments against them. ``BVHSegmentTracer`` searches
+its hierarchy once with the *shaft* of the box and the apex, their convex hull
+(Haines and Wallace, 1991). The shaft is described by its bounding box and by
+the planes through the apex and the edges of the box that are on its outline
+seen from the apex, at most six; a box of the hierarchy that lies outside one of
+them holds no candidate. The description is conservative, and the shaft is
+padded by the margin of the hierarchy. The cost per segment is one triangle test
+per candidate, so this pays off only when the shaft meets few triangles. It does
+not when the paths run along a surface of the hull, as they do next to a
+boundary plane that contains the source.
+
+**Direction grid.** Seen from the apex, a segment that ends there is one
+direction, and it can only cross the triangles that cover this direction and are
+not farther from the apex than its start point. ``DirectionGridTracer`` bins the
+directions on the six faces of a cube centered at the apex. On a face, with
+:math:`w` the coordinate along its axis and :math:`(u, v)` the two others
+divided by :math:`w`, a triangle clipped to the pyramid of the face projects
+onto a convex polygon. The triangle is listed, with the bounding rectangle of
+that polygon and its distance to the apex, in every bin the rectangle touches.
+The list of a bin is sorted by distance. A segment computes its face and
+:math:`(u, v)`, goes through the list of its bin up to the distance of its start
+point, and tests the triangles whose rectangle holds :math:`(u, v)`. There is no
+search.
+
+The rectangle of a thin or slanted triangle is much larger than the triangle. A
+triangle whose three vertices are in front of the apex, :math:`w > 0`, projects
+onto the triangle of its projected vertices, its *outline*. When the three
+project within eight face widths, the outline is kept, in single precision, and
+a direction inside the rectangle is tested against its three edges before the
+triangle test. On the Kobayashi meshes this brings the number of triangle tests
+per path from three times the number of crossings down to the number of
+crossings.
+
+The grid is conservative for three reasons:
+
+- the rectangles and the outlines are enlarged by :math:`10^{-5}`, in the units
+  of :math:`(u, v)`, and the pyramid of a face by as much before clipping, so a
+  direction on the border of two faces finds the triangle on both. The rounding
+  of an outline to single precision is below :math:`10^{-6}`;
+- a segment is accepted only when its end point is within :math:`10^{-12}` of
+  the size of the hull from the apex, and the triangles within :math:`10^{-6}`
+  of that size from the apex are tested by every segment. A crossing farther
+  than that is seen from the apex within :math:`10^{-6}` of the direction of
+  the start point, which the enlargement covers;
+- the listed distance is a lower bound, in single precision, of the distance
+  to the triangle.
+
+A segment that does not end at the apex is handed to the tracer the grid was
+built from. The memory of the grid is one entry of 28 bytes per triangle and
+bin and one outline of 24 bytes per triangle and face, and it is built in one
+pass over the triangles followed by a sort.
+
 Use in the uncollided problem
 -----------------------------
 
@@ -203,6 +265,26 @@ ignore and the material at the source is that of its cell.
 ``ComputeCellWalkOpticalDepth`` or with ``ComputeHullOpticalDepth``. Everything
 else, the quadrature points, the projection, the exact integration next to the
 source and the conservation correction, is shared by the two tracers.
+
+``hull_tracer_search`` selects how ``ComputeHullOpticalDepth`` finds the
+crossings of a path that is not folded, which runs from a point of a cell to a
+physical source:
+
+- ``"segment"``: ``Trace``, for every path.
+- ``"cell_shaft"``: each thread keeps the candidates of the cell and source it
+  is working on, collected for the bounding box of the vertices of the cell, and
+  calls ``TraceCandidates``. A path whose start point is not in that box searches
+  the hierarchy.
+- ``"source_directions"``: a ``DirectionGridTracer`` is built for each physical
+  source before its cells are traced and released afterwards, so one grid exists
+  at a time on each rank.
+
+A path to an image source is folded into pieces that do not end at a common
+point, and always uses ``Trace``.
+
+``hull_tracer_statistics`` gathers a ``HullTraceCounters`` and the time of the
+searches in each thread; the threads add them to those of the problem when they
+are done, and ``ReportHullStatistics`` sums them over the ranks.
 
 ``ComputeHullOpticalDepth`` checks every path:
 
@@ -310,3 +392,13 @@ analytic uncollided problems with both tracers against the same reference
 values, compare the two tracers and the two tracer backends directly, and run
 ``method="ray_trace"`` on one, two and four ranks with the same reference
 values.
+
+The two searches for segments that share their end point are compared, crossing
+by crossing, with ``BruteForceSegmentTracer``, for end points inside the domain,
+on a corner, a face and an edge of its boundary, and within :math:`2\times
+10^{-7}` of the boundary. The start points include points on the planes of the
+hull, points whose segment runs within a plane of the hull or through one of its
+vertices, and points at and around the end point. The regression variants with
+``hull_tracer_search`` keep the flux checks of the default search and check the
+numbers of paths, segments and crossings of a run with
+``hull_tracer_backend="brute_force"``.
