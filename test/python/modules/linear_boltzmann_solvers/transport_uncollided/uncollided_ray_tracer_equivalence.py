@@ -9,10 +9,12 @@ problem has three materials, a reflecting boundary whose image source is traced 
 folded paths, and exact integration next to the source, and the whole mesh is ray traced so that
 every cell is compared.
 
-The source position is generic. When a path passes exactly through an edge or a vertex of the
-mesh, which happens on regular meshes for sources at simple coordinates, the cell walk finds no
-exit face and continues from a displaced point, so its optical depth is then approximate while
-the material-hull tracer remains exact (see the SegmentTracerTest unit tests).
+The mesh is regular and the source sits at simple coordinates, so about two hundred paths pass
+exactly through an edge of the mesh: in the xy plane, the path from (-0.75, 0.625) to the source
+has a slope of -3/4 and goes through the mesh edge at (-0.25, 0.25). The cell walk must resolve
+such a path consistently, crossing the cells it only touches with a zero length. Displacing the
+path instead changes its length in each material by about one percent of the cell size and the
+flux by 2e-7 of its maximum, which this test rejects.
 
 The accuracy of the flux itself is checked against analytic solutions by the other uncollided
 tests, which run with both tracers. This test adds two statements:
@@ -55,7 +57,7 @@ def solve(grid, xs_map, ray_tracer, hull_tracer_backend):
         num_groups=1,
         groupsets=[{"groups_from_to": [0, 0]}],
         xs_map=xs_map,
-        point_sources=[PointSource(location=[0.3127, -0.1713, 0.1189], strength=[1.0])],
+        point_sources=[PointSource(location=[0.31, -0.17, 0.12], strength=[1.0])],
         near_source=[
             RPPLogicalVolume(xmin=-1.1, xmax=1.1, ymin=-1.1, ymax=1.1, zmin=-1.1, zmax=1.1)
         ],

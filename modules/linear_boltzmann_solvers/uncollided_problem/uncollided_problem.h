@@ -218,6 +218,29 @@ protected:
                                    double tolerance);
 
   /**
+   * Walks a straight segment from cell to cell and appends the length of the segment in each
+   * cell to @p segments, which is cleared first.
+   *
+   * The cell walk normally finds the face through which a path leaves a cell with a triangle
+   * test that has no rule for a path through an edge or a vertex: it can then reject every
+   * triangle around the edge, or accept one that leads to a cell the path only touches. This walk
+   * uses IntersectSegmentTriangle in one frame for the whole segment, which resolves an edge or
+   * a vertex as if the segment were displaced by an infinitesimal amount, the same for every
+   * cell. The segment then leaves each convex cell through exactly one side triangle, and a
+   * cell it only touches is crossed with a zero length.
+   *
+   * Requires the precomputed face data of use_fast_trace_ (convex cells). Returns false, with
+   * @p segments unspecified, when the walk does not end in a cell that contains @p segment_end
+   * or on a boundary face at @p segment_end. Thread-safe.
+   */
+  bool WalkSegmentWatertight(size_t start_cell,
+                             const Vector3& segment_start,
+                             const Vector3& segment_end,
+                             std::vector<std::pair<size_t, double>>& segments,
+                             size_t& end_cell,
+                             double tolerance) const;
+
+  /**
    * Optical depth between a point of a cell and a source, from the lengths of the path in each
    * material. The path is intersected with the material hull only, so its cost does not grow
    * with the number of cells it crosses.
@@ -356,8 +379,13 @@ protected:
   std::vector<std::uint32_t> cell_hull_materials_;
   /// Number of paths traced again from a displaced start point.
   std::atomic<size_t> hull_retraced_segments_ = 0;
+  /// Number of path pieces that passed through an edge or a vertex of the mesh and were walked
+  /// again with WalkSegmentWatertight.
+  std::atomic<size_t> cell_walk_edge_paths_ = 0;
   /// Number of times the cell walk found no exit from a cell and continued from a point
   /// displaced by the mesh ray tracer, which makes the optical depth of that path approximate.
+  /// This remains for meshes with non-convex cells or faces of more than
+  /// FaceVertData::max_sides vertices.
   std::atomic<size_t> cell_walk_nudged_paths_ = 0;
 
   unsigned int ell_max_ = 0;

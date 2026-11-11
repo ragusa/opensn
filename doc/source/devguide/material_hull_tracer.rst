@@ -218,13 +218,24 @@ start of a piece is the material at the end of the piece before it. A folded
 path touches the reflecting boundaries without crossing them, so their triangles
 are excluded for image sources.
 
-The cell walk has no exact treatment of a path that passes through an edge or a
-vertex of the mesh. Its search for the exit face of a cell then finds nothing
-and it falls back on ``RayTracer::TraceRay``, which displaces the point by about
-one percent of the cell size. The lengths of such a path are off by a similar
-amount. These paths are counted and reported. They occur on regular meshes for
-sources at simple coordinates; the material-hull tracer is exact for them, which
-``SegmentTracerTest.QuadraturePointsOfEveryCellMatchVoxelReference`` checks.
+The cell walk finds the face through which a path leaves a cell with a triangle
+test that has no rule for a path through an edge or a vertex of the mesh. It
+can then reject every triangle around the edge, or accept one that leads to a
+cell the path only touches, and the search for the next exit fails. When that
+happens, ``WalkSegmentWatertight`` walks that piece of the path again from its
+start with ``IntersectSegmentTriangle``, in one frame for the whole piece. The
+edge is then resolved as for one displaced path, the same for every cell: the
+path leaves each convex cell through exactly one side triangle, and a cell it
+only touches is crossed with a zero length. These paths occur on regular meshes
+for sources at simple coordinates. Their number is logged, and
+``uncollided_ray_tracer_equivalence.py`` checks that the two tracers agree to
+round-off on them.
+
+Before this, such a path fell back on ``RayTracer::TraceRay``, which displaces
+the point by about one percent of the cell size, and the length of the path in
+each cell was off by a similar amount. That fallback remains for meshes with
+non-convex cells or faces of more than eight vertices, for which the walk has
+no precomputed face data; the paths that take it are counted in a warning.
 
 Tests
 -----

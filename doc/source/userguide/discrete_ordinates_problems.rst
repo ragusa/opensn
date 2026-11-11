@@ -628,14 +628,15 @@ the same projection and the same conservation correction.
    that had to be traced again from a displaced start point, which is zero
    unless a path passes within round-off of a hull edge.
 
-The two tracers agree to round-off, with one exception. When a path passes
-exactly through an edge or a vertex of the mesh, the cell walk finds no exit
-face and continues from a point displaced by about one percent of the cell
-size, which changes the path lengths by a similar amount. This happens on
-regular meshes when the source sits at simple coordinates. The cell walk
-reports how many paths were affected; the material-hull tracer treats these
-paths exactly. Moving the source by a small generic amount removes the
-difference.
+The two tracers agree to round-off. This includes paths that pass exactly
+through an edge or a vertex of the mesh, which occur on regular meshes when the
+source sits at simple coordinates: both tracers resolve them with the same
+rule, and the cell walk reports how many it met. On meshes with non-convex
+cells, or with faces of more than eight vertices, the cell walk has no such
+rule. It then continues such a path from a point displaced by about one percent
+of the cell size, which changes the length of the path in each cell by a
+similar amount, and it warns about the number of paths affected. The
+material-hull tracer is exact on every mesh.
 
 ``hull_tracer_backend`` selects the implementation of the material-hull tracer:
 ``"bvh"`` (default) or ``"brute_force"``, which tests every hull triangle and is

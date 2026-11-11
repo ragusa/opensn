@@ -613,6 +613,7 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
   out_flow_ = 0.0;
 
   cell_walk_nudged_paths_ = 0;
+  cell_walk_edge_paths_ = 0;
   if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
     BuildMaterialHull();
 
@@ -777,11 +778,16 @@ UncollidedProblem::Execute(const std::string& file_name, const unsigned int prog
   if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
     log.Log() << "Material-hull ray tracing: " << hull_retraced_segments_.load()
               << " paths were traced again from a displaced start point.";
-  else if (cell_walk_nudged_paths_ > 0)
-    log.Log() << "Cell-walk ray tracing: " << cell_walk_nudged_paths_.load()
-              << " paths found no exit from a cell, which happens when a path passes through "
-                 "an edge or a vertex of the mesh, and were continued from a displaced point. "
-                 "Their optical depth is approximate.";
+  else if (cell_walk_edge_paths_ > 0 or cell_walk_nudged_paths_ > 0)
+  {
+    log.Log() << "Cell-walk ray tracing: " << cell_walk_edge_paths_.load()
+              << " paths passed through an edge or a vertex of the mesh and were walked again "
+                 "with the edge-consistent triangle test.";
+    if (cell_walk_nudged_paths_ > 0)
+      log.Log0Warning() << GetName() << ": " << cell_walk_nudged_paths_.load()
+                        << " ray-traced paths found no exit from a cell and were continued "
+                           "from a displaced point. Their optical depth is approximate.";
+  }
 
   WriteFluxMoments(file);
 
@@ -915,6 +921,8 @@ UncollidedProblem::ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
         cell_id = (*containing_cell)->local_id;
       }
     }
+    const size_t piece_start_cell = cell_id;
+    const size_t piece_first_segment = scratch_segs.size();
     Vector3 line_point = segment_start;
     while (remaining_distance > tolerance)
     {
@@ -964,6 +972,26 @@ UncollidedProblem::ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
 
         if (not found)
         {
+          // No exit was found: the path passes through an edge or a vertex of the mesh, where
+          // the triangle test above can reject every triangle around the edge, or accept one
+          // that leads to a cell the path only touches. Walk this piece of the path again from
+          // its start with a triangle test that resolves edges and vertices consistently.
+          thread_local std::vector<std::pair<size_t, double>> piece_segs;
+          size_t piece_end_cell = piece_start_cell;
+          if (WalkSegmentWatertight(piece_start_cell,
+                                    segment_start,
+                                    segment_end,
+                                    piece_segs,
+                                    piece_end_cell,
+                                    tolerance))
+          {
+            ++cell_walk_edge_paths_;
+            scratch_segs.resize(piece_first_segment);
+            scratch_segs.insert(scratch_segs.end(), piece_segs.begin(), piece_segs.end());
+            cell_id = piece_end_cell;
+            break;
+          }
+
           ++cell_walk_nudged_paths_;
           // Rare fallback for degenerate cases (point on a face/vertex): let TraceRay nudge.
           auto trace_point = line_point;
@@ -1069,6 +1097,86 @@ UncollidedProblem::ComputeCellWalkOpticalDepth(RayTracer& ray_tracer,
       optical_depth[g] += sigma_t[g] * segment.second;
   }
 }
+bool
+UncollidedProblem::WalkSegmentWatertight(const size_t start_cell,
+                                         const Vector3& segment_start,
+                                         const Vector3& segment_end,
+                                         std::vector<std::pair<size_t, double>>& segments,
+                                         size_t& end_cell,
+                                         const double tolerance) const
+{
+  segments.clear();
+  const HullSegmentFrame frame({segment_start, segment_end});
+  if (not frame.valid)
+    return false;
+  const double length = (segment_end - segment_start).Norm();
+
+  size_t cell_id = start_cell;
+  // Fraction of the segment at which it entered the current cell.
+  double entered = 0.0;
+  // A segment visits a convex cell once, and the cells it only touches for a zero length.
+  const size_t max_steps = grid_->GetLocalCellCount() + 1;
+  for (size_t step = 0; step < max_steps; ++step)
+  {
+    // The segment leaves a convex cell through the one triangle it crosses outward. The side
+    // triangles (v_s, v_s+1, face centroid) have the outward normal of the cell.
+    const uint32_t face_offset = cell_face_offsets_[cell_id];
+    const uint32_t num_faces = cell_num_faces_[cell_id];
+    bool leaves = false;
+    double exit_fraction = std::numeric_limits<double>::max();
+    uint32_t exit_face = 0;
+    for (uint32_t f = 0; f < num_faces; ++f)
+    {
+      const auto& face = all_face_verts_[face_offset + f];
+      for (uint32_t side = 0; side < face.num_sides; ++side)
+      {
+        const std::array<Vector3, 3> triangle = {
+          face.verts[side], face.verts[side + 1 < face.num_sides ? side + 1 : 0], face.centroid};
+        double fraction = 0.0;
+        bool outward = false;
+        if (IntersectSegmentTriangle(frame, triangle, fraction, outward) and outward and
+            fraction < exit_fraction)
+        {
+          leaves = true;
+          exit_fraction = fraction;
+          exit_face = f;
+        }
+      }
+    }
+
+    const Cell& cell = grid_->GetLocalCell(cell_id);
+    const double end_tolerance = std::max(tolerance, cell_sizes_[cell_id] * 1.0e-10);
+    if (not leaves)
+    {
+      // The segment ends in this cell. Check it, so that a wrong turn at an edge cannot assign
+      // the rest of the segment to a cell that does not contain its end.
+      const double point_tolerance = cell_sizes_[cell_id] * 1.0e-8;
+      for (const auto& face : cell.faces)
+        if (face.normal.Dot(segment_end - face.centroid) > point_tolerance)
+          return false;
+      segments.emplace_back(cell_id, (1.0 - entered) * length);
+      end_cell = cell_id;
+      return true;
+    }
+
+    segments.emplace_back(cell_id, std::max(0.0, exit_fraction - entered) * length);
+    entered = std::max(entered, exit_fraction);
+    if (not cell.faces[exit_face].has_neighbor)
+    {
+      // The segment reaches the boundary: this is its end, on a boundary face, or it leaves the
+      // mesh.
+      end_cell = cell_id;
+      return (1.0 - entered) * length <= end_tolerance;
+    }
+    const auto neighbor =
+      global_to_local_id_.find(all_face_verts_[face_offset + exit_face].neighbor_id);
+    if (neighbor == global_to_local_id_.end())
+      return false;
+    cell_id = neighbor->second;
+  }
+  return false;
+}
+
 void
 UncollidedProblem::BuildMaterialHull()
 {
