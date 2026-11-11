@@ -200,6 +200,27 @@ protected:
   void RaytraceNearSourceRegion(const SourcePoint& source_point);
 
   /**
+   * Conservation correction of the ray-traced cells of all ranks, for method = "ray_trace".
+   *
+   * The correction of a cell needs the corrected leakage of the cells upwind of it, which can be
+   * on other ranks. What each cell contributes, a few numbers per face and group, is gathered on
+   * rank 0, which corrects the cells of the whole mesh from the source outward with
+   * CorrectCellBalance and sends each rank the scale factors of its cells. The order depends
+   * only on the mesh, so the result does not depend on the partitioning. Collective.
+   *
+   * Rank 0 adds the totals of all cells to @p summary, @p source_angle_fraction and the two
+   * counts, sets @p num_cells to the number of cells of all ranks, and adds the corrected
+   * leakage through the vacuum boundary to out_flow_.
+   */
+  void CorrectRayTracedCells(const SourcePoint& source_point,
+                             std::vector<RawNearSourceCell>& raw_cells,
+                             ConservationSummary& summary,
+                             double& source_angle_fraction,
+                             size_t& exact_neighbor_count,
+                             size_t& exact_neighbor_fallback_count,
+                             size_t& num_cells);
+
+  /**
    * Ray traces one near-source cell: the leakage through its outgoing faces, its flux projected
    * on the finite element basis, and the upwind face terms of its bulk neighbors, all before
    * the conservation correction. It reads nothing that the tracing or the correction of another
