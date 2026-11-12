@@ -31,7 +31,10 @@ hull_tracer_backend and hull_tracer_direction_bins select how the tracer searche
 turn on the statistics of the tracer. The search does not change which triangles a path crosses,
 so the flux sum and the number of crossings that the solver reports do not depend on it.
 tests.json takes the number of crossings from a run with hull_tracer_backend="brute_force",
-which tests every triangle against every path.
+which tests every triangle against every path. These runs also write a diagnostics file, for
+which the solver gathers the statistics of each cell: the number of cells with paths, the sum
+of their paths and the largest number of crossings in a cell must not depend on the search, on
+the number of ranks or on the number of threads either.
 """
 
 import importlib
@@ -222,10 +225,14 @@ if __name__ == "__main__":
         for name in ("hull_tracer_search", "hull_tracer_backend", "hull_tracer_direction_bins")
         if name in globals()
     }
+    solver_options = {}
     if tracer_options:
         tracer_options["hull_tracer_statistics"] = True
-    if rank == 0 and os.path.exists(file_name):
-        os.remove(file_name)
+        solver_options["diagnostics_file"] = file_name.replace(".h5", "_diagnostics.h5")
+    if rank == 0:
+        for name in (file_name, *solver_options.values()):
+            if os.path.exists(name):
+                os.remove(name)
     problem = UncollidedProblem(
         mesh=grid,
         num_groups=1,
@@ -239,7 +246,7 @@ if __name__ == "__main__":
         ray_tracer="material_hull",
         **tracer_options,
     )
-    solver = UncollidedSolver(problem=problem, file_name=file_name)
+    solver = UncollidedSolver(problem=problem, file_name=file_name, **solver_options)
     solver.Initialize()
     solver.Execute()
 
@@ -285,8 +292,9 @@ if __name__ == "__main__":
         if scattering_order > 0:
             print(f"RayTraceParallelMaxP1ScaledError={max_p1_error:.8e}")
         sys.stdout.flush()
-        if os.path.exists(file_name):
-            os.remove(file_name)
+        for name in (file_name, *solver_options.values()):
+            if os.path.exists(name):
+                os.remove(name)
 
     if max_error > 0.1:
         raise RuntimeError(f"Scalar-flux error is too large: {max_error}")

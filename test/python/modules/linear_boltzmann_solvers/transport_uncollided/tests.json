@@ -1373,7 +1373,7 @@
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 1 rank, hexahedra, one hull search per cell: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 1 rank, hexahedra, one hull search per cell: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 1,
     "args": [
       "mesh_type=\"hexahedra\"",
@@ -1428,12 +1428,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 4096.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 1486160.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 1176.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 4 ranks, hexahedra, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, hexahedra, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 4,
     "args": [
       "mesh_type=\"hexahedra\"",
@@ -1488,12 +1506,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 4.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 1486160.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 1176.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 2 ranks, prisms, one hull search per cell: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, prisms, one hull search per cell: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 2,
     "args": [
       "mesh_type=\"prisms\"",
@@ -1554,12 +1590,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 9920.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 9920.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 2645202.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 594.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 1 rank, prisms, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 1 rank, prisms, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 1,
     "args": [
       "mesh_type=\"prisms\"",
@@ -1620,12 +1674,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 1.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 9920.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 2645202.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 594.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 2 ranks, tetrahedra, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, tetrahedra, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 2,
     "args": [
       "mesh_type=\"tetrahedra\"",
@@ -1680,12 +1752,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 2.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 735.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 324476.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 1490.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 4 ranks, tetrahedra, one hull search per cell: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, tetrahedra, one hull search per cell: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 4,
     "args": [
       "mesh_type=\"tetrahedra\"",
@@ -1740,12 +1830,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 735.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 735.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 324476.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 1490.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 1 rank, reflecting, one hull search per cell: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 1 rank, reflecting, one hull search per cell: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 1,
     "args": [
       "mesh_type=\"reflecting\"",
@@ -1788,12 +1896,30 @@
         "key": "Candidate sets           =",
         "goldvalue": 1728.0,
         "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 1728.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 2095776.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 227.0,
+        "abs_tol": 0.0
       }
     ]
   },
   {
     "file": "uncollided_ray_trace_parallel.py",
-    "comment": "Every cell ray traced against the material hull on 2 ranks, reflecting, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, reflecting, hull triangles binned by direction from the source: same flux, and the numbers of paths, segments and crossings, in all and by cell, of a run that tests every triangle against every path (hull_tracer_backend=\"brute_force\")",
     "num_procs": 2,
     "args": [
       "mesh_type=\"reflecting\"",
@@ -1835,6 +1961,24 @@
         "type": "KeyValuePair",
         "key": "Candidate sets           =",
         "goldvalue": 2.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cells with paths         =",
+        "goldvalue": 1728.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Paths of the cells       =",
+        "goldvalue": 2095776.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Most crossings in a cell =",
+        "goldvalue": 227.0,
         "abs_tol": 0.0
       }
     ]
