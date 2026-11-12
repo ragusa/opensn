@@ -1089,8 +1089,8 @@ WrapLBS(py::module& slv)
         triangles in them; the time spent finding the crossings; and the part
         of it spent building the candidate sets. The counts do not depend on
         the machine. The timing adds two clock readings per path. The same
-        numbers are written as attributes of the diagnostics file. Ignored
-        with ``'cell_walk'``.
+        numbers are written to the diagnostics file, as attributes for the
+        totals and as datasets for each cell. Ignored with ``'cell_walk'``.
 
     Notes
     -----
@@ -2066,7 +2066,13 @@ WrapUncollidedSolver(py::module& slv)
         ``hull tracer candidate box tests``,
         ``hull tracer candidate triangles``, ``hull tracer search time`` and
         ``hull tracer collection time`` (seconds) hold the work of the
-        material-hull ray tracer, summed over the ranks and threads.
+        material-hull ray tracer, summed over the ranks and threads. The
+        datasets ``hull tracer cell paths``, ``hull tracer cell segments`` and
+        so on, one for each of these attributes, hold the same numbers for
+        each cell, summed over the sources and their images, in the order of
+        the global cell ids in ``hull tracer cell ids``, which is increasing
+        and does not depend on the partitioning. The table of directions of
+        ``'source_directions'`` is counted in the attributes only.
 
     Notes
     -----

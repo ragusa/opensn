@@ -293,7 +293,12 @@ protected:
   /// thread that traces paths calls this when it is done. Thread-safe.
   void FlushHullThreadStatistics();
 
-  /// Sums the statistics over the ranks and reports them from rank 0. Collective.
+  /// Adds what the statistics of the calling thread gained since @p before to those of a local
+  /// cell, when the statistics of the cells are kept. A cell is traced by one thread at a time.
+  void AddHullCellStatistics(size_t cell_local_id, HullStatistics before);
+
+  /// Sums the statistics over the ranks and reports them from rank 0. When the statistics of
+  /// the cells are kept, gathers them on rank 0. Collective.
   void ReportHullStatistics();
 
   /// Writes the diagnostics file from rank 0. Collective.
@@ -632,6 +637,13 @@ protected:
   /// of all ranks after ReportHullStatistics.
   HullStatistics hull_statistics_;
   std::mutex hull_statistics_mutex_;
+  /// Statistics of the paths traced for each local cell, summed over the sources. Kept when
+  /// the statistics are on and a diagnostics file is written; empty otherwise.
+  std::vector<HullStatistics> hull_cell_statistics_;
+  /// On rank 0 after ReportHullStatistics: the global ids of the cells of all ranks, in
+  /// increasing order, and their statistics, indexed [cell * number of entries + entry].
+  std::vector<std::uint64_t> hull_cell_ids_;
+  std::vector<std::uint64_t> hull_cell_values_;
   /// Number of path pieces that passed through an edge or a vertex of the mesh and were walked
   /// again with WalkSegmentWatertight.
   std::atomic<size_t> cell_walk_edge_paths_ = 0;

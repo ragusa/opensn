@@ -761,6 +761,17 @@ measure to compare the searches with. The search time is a sum over the
 threads, so it compares with the wall time of the ray-tracing phase only on one
 rank and one thread. The same numbers are attributes of the diagnostics file.
 
+The diagnostics file also receives the same numbers for each cell, summed over
+the sources and their images, which shows where in the mesh the search is
+expensive: ``hull tracer cell ids`` holds the global ids of all cells in
+increasing order, whatever the partitioning, and one dataset per number
+(``hull tracer cell paths``, ``hull tracer cell box tests``,
+``hull tracer cell triangle tests``, ``hull tracer cell crossings``,
+``hull tracer cell search time`` and so on) holds the values of the cells in
+that order. A cell that is not ray traced has zeros. The values of the cells add
+up to the totals, except for the table of directions of ``"source_directions"``,
+which is built once per source and rank and belongs to no cell.
+
 Source support
 --------------
 

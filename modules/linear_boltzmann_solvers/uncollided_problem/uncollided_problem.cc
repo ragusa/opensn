@@ -841,6 +841,12 @@ UncollidedProblem::Execute(const std::string& file_name,
   timings_ = PhaseTimings();
   write_diagnostics_ = not diagnostics_file_name.empty();
   source_diagnostics_.clear();
+  const bool keep_cell_statistics = hull_tracer_statistics_ and write_diagnostics_ and
+                                    ray_tracer_type_ == RayTracerType::MATERIAL_HULL;
+  hull_cell_statistics_.assign(keep_cell_statistics ? grid_->GetLocalCellCount() : 0,
+                               HullStatistics());
+  hull_cell_ids_.clear();
+  hull_cell_values_.clear();
   Timer phase_timer;
   if (ray_tracer_type_ == RayTracerType::MATERIAL_HULL)
     BuildMaterialHull();
@@ -1818,6 +1824,18 @@ UncollidedProblem::FlushHullThreadStatistics()
 }
 
 void
+UncollidedProblem::AddHullCellStatistics(const size_t cell_local_id, HullStatistics before)
+{
+  if (hull_cell_statistics_.empty())
+    return;
+  const auto now = ThreadHullStatistics().Entries();
+  const auto then = before.Entries();
+  const auto of_cell = hull_cell_statistics_[cell_local_id].Entries();
+  for (size_t entry = 0; entry < now.size(); ++entry)
+    *of_cell[entry].second += *now[entry].second - *then[entry].second;
+}
+
+void
 UncollidedProblem::ReportHullStatistics()
 {
   std::ostringstream report;
@@ -1839,6 +1857,58 @@ UncollidedProblem::ReportHullStatistics()
     report << "\n";
   }
   log.Log() << report.str();
+  if (not write_diagnostics_)
+    return;
+
+  // The statistics of the cells of all ranks, gathered rank after rank and then put in the
+  // order of the global cell ids, which does not depend on the partitioning.
+  const size_t num_entries = hull_statistics_.Entries().size();
+  std::vector<std::uint64_t> local_ids;
+  std::vector<std::uint64_t> local_values;
+  local_ids.reserve(hull_cell_statistics_.size());
+  local_values.reserve(hull_cell_statistics_.size() * num_entries);
+  for (const auto& cell : grid_->GetLocalCells())
+  {
+    local_ids.push_back(cell->global_id);
+    for (const auto& [name, value] : hull_cell_statistics_[cell->local_id].Entries())
+      local_values.push_back(*value);
+  }
+  const auto ids = GatherOnRoot(local_ids);
+  const auto values = GatherOnRoot(local_values);
+  if (opensn::mpi_comm.rank() != 0)
+    return;
+
+  std::vector<size_t> order(ids.size());
+  std::iota(order.begin(), order.end(), size_t{0});
+  std::sort(
+    order.begin(), order.end(), [&ids](const size_t a, const size_t b) { return ids[a] < ids[b]; });
+  hull_cell_ids_.resize(ids.size());
+  hull_cell_values_.resize(values.size());
+  // Summary of what the file receives.
+  std::uint64_t num_traced_cells = 0;
+  std::uint64_t num_paths = 0;
+  std::uint64_t most_crossings = 0;
+  for (size_t n = 0; n < order.size(); ++n)
+  {
+    hull_cell_ids_[n] = ids[order[n]];
+    HullStatistics of_cell;
+    const auto entries = of_cell.Entries();
+    for (size_t entry = 0; entry < num_entries; ++entry)
+    {
+      *entries[entry].second = values[order[n] * num_entries + entry];
+      hull_cell_values_[n * num_entries + entry] = *entries[entry].second;
+    }
+    num_traced_cells += of_cell.paths > 0 ? 1 : 0;
+    num_paths += of_cell.paths;
+    most_crossings = std::max(most_crossings, of_cell.counters.crossings);
+  }
+  log.Log() << "Material-hull tracer statistics of the cells, written to the diagnostics file:\n"
+            << " " << std::left << std::setw(25) << "Cells with paths"
+            << "= " << num_traced_cells << "\n"
+            << " " << std::setw(25) << "Paths of the cells"
+            << "= " << num_paths << "\n"
+            << " " << std::setw(25) << "Most crossings in a cell"
+            << "= " << most_crossings << "\n";
 }
 
 void
@@ -1880,6 +1950,7 @@ UncollidedProblem::ProjectReflectedImageSources(const unsigned int progress_inte
       for (size_t cell_index = thread_id; cell_index < num_cells; cell_index += num_threads)
       {
         const auto& cell = grid_->GetLocalCell(cell_index);
+        const HullStatistics statistics_before = ThreadHullStatistics();
         const auto& cell_mapping = sdm.GetCellMapping(cell);
         const size_t cell_num_nodes = cell_mapping.GetNumNodes();
         const auto fe_vol_data = cell_mapping.MakeVolumetricFiniteElementData();
@@ -2010,6 +2081,7 @@ UncollidedProblem::ProjectReflectedImageSources(const unsigned int progress_inte
             }
           }
 
+        AddHullCellStatistics(cell.local_id, statistics_before);
         const size_t completed = completed_cells.fetch_add(1, std::memory_order_relaxed) + 1;
         if (progress_interval > 0)
         {
@@ -2759,11 +2831,15 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
       {
         RayTracer ray_tracer(grid_, &cell_sizes_, not all_cells_convex_);
         for (size_t n = next_cell.fetch_add(1); n < num_near_cells; n = next_cell.fetch_add(1))
+        {
+          const HullStatistics before = ThreadHullStatistics();
           TraceNearSourceCell(ray_tracer,
                               source_point,
                               near_spls_[n],
                               is_exact_neighbor[near_spls_[n]],
                               raw_cells[n]);
+          AddHullCellStatistics(near_spls_[n], before);
+        }
         FlushHullThreadStatistics();
       }
       catch (...)
@@ -3617,6 +3693,28 @@ UncollidedProblem::WriteDiagnostics(const std::string& file_name) const
                                     file, attribute, 1.0e-9 * static_cast<double>(*value));
           else
             written = written and H5CreateAttribute<uint64_t>(file, attribute, *value);
+        }
+
+        // The same statistics for each cell, one dataset per entry.
+        const auto entries = statistics.Entries();
+        const size_t num_cells = hull_cell_ids_.size();
+        written =
+          written and H5WriteDataset1D<uint64_t>(file, "hull tracer cell ids", hull_cell_ids_);
+        for (size_t entry = 0; entry < entries.size() and written; ++entry)
+        {
+          const std::string dataset = "hull tracer cell " + std::string(entries[entry].first);
+          std::vector<std::uint64_t> counts(num_cells);
+          for (size_t n = 0; n < num_cells; ++n)
+            counts[n] = hull_cell_values_[n * entries.size() + entry];
+          if (dataset.ends_with("time"))
+          {
+            std::vector<double> seconds(num_cells);
+            for (size_t n = 0; n < num_cells; ++n)
+              seconds[n] = 1.0e-9 * static_cast<double>(counts[n]);
+            written = H5WriteDataset1D<double>(file, dataset, seconds);
+          }
+          else
+            written = H5WriteDataset1D<uint64_t>(file, dataset, counts);
         }
       }
       OpenSnLogicalErrorIf(not written,

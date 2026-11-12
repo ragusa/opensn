@@ -284,7 +284,12 @@ point, and always uses ``Trace``.
 
 ``hull_tracer_statistics`` gathers a ``HullTraceCounters`` and the time of the
 searches in each thread; the threads add them to those of the problem when they
-are done, and ``ReportHullStatistics`` sums them over the ranks.
+are done, and ``ReportHullStatistics`` sums them over the ranks. When a
+diagnostics file is written, a thread also adds what its statistics gained
+while it traced a cell to the statistics of that cell
+(``AddHullCellStatistics``); a cell is traced by one thread at a time, so this
+needs no lock. ``ReportHullStatistics`` gathers the statistics of the cells on
+rank 0 and orders them by global cell id.
 
 ``ComputeHullOpticalDepth`` checks every path:
 
