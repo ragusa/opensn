@@ -268,7 +268,11 @@ source and the conservation correction, is shared by the two tracers.
 
 ``hull_tracer_search`` selects how ``ComputeHullOpticalDepth`` finds the
 crossings of a path that is not folded, which runs from a point of a cell to a
-physical source:
+physical source. Its default, ``"auto"``, is resolved by ``ResolveHullSearch``
+when the problem is constructed: ``"source_directions"`` with
+``method="ray_trace"``, where the table of a source serves every cell, and
+``"segment"`` with ``method="sweep"``, where it would serve the near-source
+cells only. ``BuildMaterialHull`` logs the search in use.
 
 - ``"segment"``: ``Trace``, for every path.
 - ``"cell_shaft"``: each thread keeps the candidates of the cell and source it
@@ -404,6 +408,8 @@ on a corner, a face and an edge of its boundary, and within :math:`2\times
 10^{-7}` of the boundary. The start points include points on the planes of the
 hull, points whose segment runs within a plane of the hull or through one of its
 vertices, and points at and around the end point. The regression variants with
-``hull_tracer_search`` keep the flux checks of the default search and check the
+``hull_tracer_search`` keep the flux checks of the other variants and check the
 numbers of paths, segments and crossings of a run with
-``hull_tracer_backend="brute_force"``.
+``hull_tracer_backend="brute_force"``. The variants with ``compare_search``
+solve the problem a second time with ``"segment"`` and require every value of
+the flux of every rank to be equal, bit for bit, to that of the default search.

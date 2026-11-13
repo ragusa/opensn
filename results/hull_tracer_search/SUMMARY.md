@@ -89,9 +89,9 @@ bit for bit, to those of `segment`; `run_search_study.py` checks this.
   all.
 - `source_directions` brings the triangle tests down to 2.3 per path, the number of crossings.
   The bound tests fall as the bins get finer, and the time is flat between 128 and 512 bins.
-  At 256 bins, the default, the search is 4.6 times faster on the fine mesh and 5.4 times
-  faster on the xfine mesh, and the ray-tracing phase 2.9 and 3.3 times faster. The grid takes
-  0.05 to 0.08 s to build, and 17 to 25 MB.
+  At 256 bins, the default when these runs were made (128 since), the search is 4.6 times
+  faster on the fine mesh and 5.4 times faster on the xfine mesh, and the ray-tracing phase
+  2.9 and 3.3 times faster. The grid takes 0.05 to 0.08 s to build, and 17 to 25 MB.
 - What is left of the ray-tracing phase with `source_directions_256` is no longer mainly the
   search: 3.6 s of search, clock readings included, in a phase of 6.8 s on the xfine mesh.
 

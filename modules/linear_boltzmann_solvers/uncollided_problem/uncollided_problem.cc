@@ -184,19 +184,23 @@ UncollidedProblem::GetInputParameters()
 
   params.AddOptionalParameter(
     "hull_tracer_search",
-    "segment",
+    "auto",
     "How the material-hull ray tracer finds the triangles a path can cross. \"segment\" searches "
     "the hull for every path. \"cell_shaft\" searches it once for all the paths from a cell to "
     "a source and tests each path against the triangles found. \"source_directions\" bins "
     "the triangles by direction seen from each source, and a path tests the triangles of its "
-    "direction. The crossings, and so the results, are the same. Paths to the images of a "
-    "source in reflecting boundaries always use \"segment\".");
+    "direction. \"auto\" is \"source_directions\" with method = \"ray_trace\", where every cell "
+    "is ray traced, and \"segment\" with method = \"sweep\", where the near-source cells can be "
+    "too few to repay the table of directions of each source. The crossings, and so the "
+    "results, are the same. Paths to the images of a source in reflecting boundaries always "
+    "use \"segment\".");
   params.ConstrainParameterRange(
-    "hull_tracer_search", AllowableRangeList::New({"segment", "cell_shaft", "source_directions"}));
+    "hull_tracer_search",
+    AllowableRangeList::New({"auto", "segment", "cell_shaft", "source_directions"}));
 
   params.AddOptionalParameter(
     "hull_tracer_direction_bins",
-    256,
+    128,
     "Number of bins along each side of the six faces of the direction grid of "
     "hull_tracer_search = \"source_directions\".");
   params.ConstrainParameterRange("hull_tracer_direction_bins",
@@ -303,6 +307,19 @@ UncollidedProblem::IsOnDomainBoundary(const PointSource& point_source) const
   return on_boundary != 0;
 }
 
+UncollidedProblem::HullSearch
+UncollidedProblem::ResolveHullSearch(const std::string& search, const std::string& method)
+{
+  if (search == "segment")
+    return HullSearch::SEGMENT;
+  if (search == "cell_shaft")
+    return HullSearch::CELL_SHAFT;
+  if (search == "source_directions")
+    return HullSearch::SOURCE_DIRECTIONS;
+  // "auto": the table of directions of a source is repaid when every cell is traced to it.
+  return method == "ray_trace" ? HullSearch::SOURCE_DIRECTIONS : HullSearch::SEGMENT;
+}
+
 UncollidedProblem::UncollidedProblem(const InputParameters& params)
   : LBSProblem(params),
     ray_tracer_type_(params.GetParamValue<std::string>("ray_tracer") == "material_hull"
@@ -310,11 +327,8 @@ UncollidedProblem::UncollidedProblem(const InputParameters& params)
                        : RayTracerType::CELL_WALK),
     hull_tracer_backend_(params.GetParamValue<std::string>("hull_tracer_backend")),
     ray_trace_all_cells_(params.GetParamValue<std::string>("method") == "ray_trace"),
-    hull_search_(params.GetParamValue<std::string>("hull_tracer_search") == "cell_shaft"
-                   ? HullSearch::CELL_SHAFT
-                   : (params.GetParamValue<std::string>("hull_tracer_search") == "source_directions"
-                        ? HullSearch::SOURCE_DIRECTIONS
-                        : HullSearch::SEGMENT)),
+    hull_search_(ResolveHullSearch(params.GetParamValue<std::string>("hull_tracer_search"),
+                                   params.GetParamValue<std::string>("method"))),
     hull_direction_bins_(params.GetParamValue<unsigned int>("hull_tracer_direction_bins")),
     hull_leaf_size_(params.GetParamValue<unsigned int>("hull_tracer_leaf_size")),
     hull_tracer_statistics_(params.GetParamValue<bool>("hull_tracer_statistics")),
@@ -1595,6 +1609,12 @@ UncollidedProblem::BuildMaterialHull()
   log.Log() << "Material hull: " << triangles.size() << " triangles between " << num_materials
             << " materials and the exterior, " << hull_tracer_backend_ << " tracer, built in "
             << std::fixed << std::setprecision(3) << timer.GetTime() / 1000.0 << " s.";
+  std::string search = "\"segment\"";
+  if (hull_search_ == HullSearch::CELL_SHAFT)
+    search = "\"cell_shaft\"";
+  else if (hull_search_ == HullSearch::SOURCE_DIRECTIONS)
+    search = "\"source_directions\" with " + std::to_string(hull_direction_bins_) + " bins";
+  log.Log() << "Material hull: search " << search << ".";
 }
 
 void

@@ -730,9 +730,9 @@ triangles of the hull it crosses. ``hull_tracer_search`` selects how they are
 found. The three choices give the same crossings and the same result to the
 last bit:
 
-* ``"segment"``, the default, searches a bounding volume hierarchy of the hull
-  for every path. ``hull_tracer_leaf_size`` sets the largest number of
-  triangles in a leaf of the hierarchy.
+* ``"segment"`` searches a bounding volume hierarchy of the hull for every
+  path. ``hull_tracer_leaf_size`` sets the largest number of triangles in a
+  leaf of the hierarchy.
 * ``"cell_shaft"`` searches the hierarchy once for all the paths from a cell to
   a source and tests each of them against every triangle found. It pays off
   only when few triangles lie between the cell and the source.
@@ -741,13 +741,39 @@ last bit:
   its direction that are not farther from the source than its start point.
   There is no search, and the number of triangle tests per path does not grow
   with the size of the hull. ``hull_tracer_direction_bins`` sets the number of
-  bins along each side of a face of the cube. The table is built once per
-  source, which takes about as long as tracing a few thousand paths; with
-  ``method="sweep"`` and a small near-source region this can exceed what it
-  saves.
+  bins along each side of a face of the cube, 128 by default. Each rank builds
+  the table of a source before it traces its cells to that source, and holds
+  one table at a time.
+
+The default, ``"auto"``, is ``"source_directions"`` with ``method="ray_trace"``
+and ``"segment"`` with ``method="sweep"``. A value given explicitly is used
+with either method.
 
 Paths to the images of a source in reflecting boundaries are folded at the
 boundaries and always use ``"segment"``.
+
+With every cell ray traced, ``"source_directions"`` with 128 bins took 2.3 to
+3.7 times less solver time than ``"segment"`` on the problems it was measured
+on (a dog-leg duct on 1 rank; two cubes of two materials and a target chamber
+of a million cells on 16 ranks), and 128 bins was within 7% of the best number
+of bins on each of them. The table does not help, or costs more than it saves,
+in these cases:
+
+* a small mesh on many ranks: every rank builds the table of the whole hull
+  for the few cells it owns (0.11 s with ``"segment"`` against 0.12 s on a
+  mesh of 4,800 cells on 16 ranks);
+* reflecting boundaries: the paths to the images, which are most of the paths,
+  do not use the table, so the time is that of ``"segment"`` and the memory of
+  the table is added;
+* ``method="sweep"``, where a table is built for each source and used for the
+  few cells of its near-source region only: no gain with one source, and a
+  ray-tracing phase about twice as long with eight. This is why ``"auto"``
+  keeps ``"segment"`` there.
+
+The table adds memory on every rank, and more with more bins: on a cube of two
+materials placed at random, on 16 ranks, the peak memory of the run was 3.7 GB
+with ``"segment"`` and 5.4, 7.8 and 15.4 GB with 64, 128 and 256 bins. Select
+``"segment"`` or fewer bins when memory is short.
 
 ``hull_tracer_statistics=True`` adds a report of the work of the tracer, summed
 over the ranks and threads: the number of paths, of segments (a path folded at

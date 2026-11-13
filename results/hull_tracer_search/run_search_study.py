@@ -31,11 +31,11 @@ INPUT = os.path.join(REPO, "results", "uncollided_hull_tracer", "kobayashi_point
 
 # Name of each configuration and the options of the tracer it sets.
 CONFIGS = {
-    "segment": {},
-    "segment_leaf1": {"hull_tracer_leaf_size": 1},
-    "segment_leaf2": {"hull_tracer_leaf_size": 2},
-    "segment_leaf8": {"hull_tracer_leaf_size": 8},
-    "segment_leaf16": {"hull_tracer_leaf_size": 16},
+    "segment": {"hull_tracer_search": "segment"},
+    "segment_leaf1": {"hull_tracer_search": "segment", "hull_tracer_leaf_size": 1},
+    "segment_leaf2": {"hull_tracer_search": "segment", "hull_tracer_leaf_size": 2},
+    "segment_leaf8": {"hull_tracer_search": "segment", "hull_tracer_leaf_size": 8},
+    "segment_leaf16": {"hull_tracer_search": "segment", "hull_tracer_leaf_size": 16},
     "cell_shaft": {"hull_tracer_search": "cell_shaft"},
     "cell_shaft_leaf1": {"hull_tracer_search": "cell_shaft", "hull_tracer_leaf_size": 1},
 }

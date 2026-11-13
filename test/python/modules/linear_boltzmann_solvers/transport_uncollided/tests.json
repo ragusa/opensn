@@ -1984,6 +1984,162 @@
     ]
   },
   {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, hexahedra, solved with the default search of the hull, which bins the triangles by direction from the source, and again with a search for every path (hull_tracer_search=\"segment\"): every value of the flux of every rank is the same, bit for bit",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"hexahedra\"",
+      "compare_search=\"segment\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np2_compare_segment",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.011072804,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209130094247,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelComparedValues=",
+        "goldvalue": 32768.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "StrCompare",
+        "key": "Material hull: search \"source_directions\" with 128 bins."
+      },
+      {
+        "type": "StrCompare",
+        "key": "Material hull: search \"segment\"."
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, tetrahedra, solved with the default search of the hull, which bins the triangles by direction from the source, and again with a search for every path (hull_tracer_search=\"segment\"): every value of the flux of every rank is the same, bit for bit",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"tetrahedra\"",
+      "compare_search=\"segment\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_tetrahedra_np4_compare_segment",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0494604883,
+        "abs_tol": 0.015
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 740.928475789106,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest cell balance residual          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelComparedValues=",
+        "goldvalue": 2940.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "StrCompare",
+        "key": "Material hull: search \"source_directions\" with 128 bins."
+      },
+      {
+        "type": "StrCompare",
+        "key": "Material hull: search \"segment\"."
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, reflecting, solved with the default search of the hull, which bins the triangles by direction from the source, and again with a search for every path (hull_tracer_search=\"segment\"): every value of the flux of every rank is the same, bit for bit",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"reflecting\"",
+      "compare_search=\"segment\""
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_reflecting_np2_compare_segment",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0120876727,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.589971523733287,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelComparedValues=",
+        "goldvalue": 13824.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "StrCompare",
+        "key": "Material hull: search \"source_directions\" with 128 bins."
+      },
+      {
+        "type": "StrCompare",
+        "key": "Material hull: search \"segment\"."
+      }
+    ]
+  },
+  {
     "file": "uncollided_3d_unstructured_analytic.py",
     "comment": "3D tetrahedral scalar-flux mesh convergence with exact near-source leakage",
     "num_procs": 1,

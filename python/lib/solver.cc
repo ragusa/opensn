@@ -1048,10 +1048,13 @@ WrapLBS(py::module& slv)
         Largest number of triangles in a leaf of the hierarchy of
         ``hull_tracer_backend='bvh'``, between 1 and 64. Smaller leaves trade
         segment-triangle tests for segment-box tests.
-    hull_tracer_search : {'segment', 'cell_shaft', 'source_directions'}, default='segment'
+    hull_tracer_search : {'auto', 'segment', 'cell_shaft', 'source_directions'}, default='auto'
         How the ``'material_hull'`` ray tracer finds the triangles a path can
-        cross. The three give the same crossings, and so the same result to
-        the last bit; they differ in cost.
+        cross. The three searches give the same crossings, and so the same
+        result to the last bit; they differ in cost and memory.
+
+        ``'auto'`` is ``'source_directions'`` with ``method='ray_trace'`` and
+        ``'segment'`` with ``method='sweep'``.
 
         ``'segment'`` searches the hull for every path.
 
@@ -1065,17 +1068,20 @@ WrapLBS(py::module& slv)
         each source, and a path tests the triangles of its direction that are
         not farther from the source than its start point. There is no search,
         and the number of triangle tests per path does not grow with the size
-        of the hull. It holds one table per source at a time, whose size
-        grows with ``hull_tracer_direction_bins``, and building it takes
-        about as long as tracing a few thousand paths.
+        of the hull. Each rank holds one table per source at a time, whose
+        size grows with ``hull_tracer_direction_bins``, and building it takes
+        about as long as tracing a few thousand paths. It does not pay off
+        for a small mesh on many ranks, for the paths to the images of a
+        source, or for the few near-source cells of ``method='sweep'`` with
+        many sources.
 
         Paths to the images of a source in reflecting boundaries are folded
         and always use ``'segment'``.
-    hull_tracer_direction_bins : int, default=256
+    hull_tracer_direction_bins : int, default=128
         Number of bins along each side of the six faces of the cube of
         directions of ``hull_tracer_search='source_directions'``, between 1
         and 4096. More bins shorten the list a path goes through and lengthen
-        the table.
+        the table, which every rank holds.
     hull_tracer_statistics : bool, default=False
         Report the work of the ``'material_hull'`` ray tracer at the end of
         :meth:`UncollidedSolver.Execute`, summed over the ranks and threads:

@@ -9,6 +9,10 @@ there, and is recorded in runs/cases.json with its wall time. Strategies A and B
 rank and run on one; strategy C runs on every rank count given. With --repeat, each case runs
 N times and the shortest wall time and its log are kept.
 
+The material-hull ray tracer searches the hull for every path (hull_tracer_search="segment"),
+as it did when the results of SUMMARY.md were taken; ../hull_tracer_search compares the
+searches.
+
 runs/ is not tracked: it holds the HDF5 outputs, which postprocess.py reduces to the tables and
 plots that are.
 """
@@ -54,6 +58,7 @@ def main():
                     "--py", f'strategy="{strategy}"',
                     "--py", f'prefix="{prefix}"',
                     "--py", f'mesh_dir="{mesh_dir}"',
+                    "--py", 'hull_tracer_search="segment"',
                 ]
                 best = None
                 for _ in range(args.repeat):

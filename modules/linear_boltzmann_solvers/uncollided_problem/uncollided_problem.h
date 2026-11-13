@@ -114,6 +114,10 @@ protected:
     SOURCE_DIRECTIONS
   };
 
+  /// The search that a value of hull_tracer_search stands for. "auto" depends on the method:
+  /// SOURCE_DIRECTIONS when every cell is ray traced ("ray_trace"), SEGMENT otherwise.
+  static HullSearch ResolveHullSearch(const std::string& search, const std::string& method);
+
   enum class CellRegion
   {
     NEAR_SOURCE,

@@ -35,6 +35,12 @@ which tests every triangle against every path. These runs also write a diagnosti
 which the solver gathers the statistics of each cell: the number of cells with paths, the sum
 of their paths and the largest number of crossings in a cell must not depend on the search, on
 the number of ranks or on the number of threads either.
+
+The optional argument compare_search names a search of the hull. The problem is then solved a
+second time with it, and the script prints how many values of the scalar flux, over all ranks,
+were compared and how many differ by at least one bit from those of the first solve, which
+uses the default search unless hull_tracer_search is given. tests.json requires none to differ
+and checks, in the log of the solver, that the two solves used different searches.
 """
 
 import importlib
@@ -47,6 +53,7 @@ if "opensn_console" not in globals():
 
     size = MPI.COMM_WORLD.size
     rank = MPI.COMM_WORLD.rank
+    MPIAllReduce = MPI.COMM_WORLD.allreduce
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../")))
     from pyopensn.aquad import GLCProductQuadrature3DXYZ
     from pyopensn.fieldfunc import FieldFunctionInterpolationPoint
@@ -233,7 +240,7 @@ if __name__ == "__main__":
         for name in (file_name, *solver_options.values()):
             if os.path.exists(name):
                 os.remove(name)
-    problem = UncollidedProblem(
+    problem_options = dict(
         mesh=grid,
         num_groups=1,
         groupsets=[{"groups_from_to": [0, 0]}],
@@ -244,11 +251,31 @@ if __name__ == "__main__":
         scattering_order=scattering_order,
         method="ray_trace",
         ray_tracer="material_hull",
-        **tracer_options,
     )
+    problem = UncollidedProblem(**problem_options, **tracer_options)
     solver = UncollidedSolver(problem=problem, file_name=file_name, **solver_options)
     solver.Initialize()
     solver.Execute()
+
+    num_compared_values = 0
+    num_different_values = 0
+    if "compare_search" in globals():
+        other_file_name = file_name.replace(".h5", "_compare.h5")
+        other_problem = UncollidedProblem(**problem_options, hull_tracer_search=compare_search)
+        other_solver = UncollidedSolver(problem=other_problem, file_name=other_file_name)
+        other_solver.Initialize()
+        other_solver.Execute()
+        if rank == 0 and os.path.exists(other_file_name):
+            os.remove(other_file_name)
+        # The local flux vectors as bytes, eight for each value.
+        flux = bytes(problem.GetPhiNewLocal())
+        other_flux = bytes(other_problem.GetPhiNewLocal())
+        if len(flux) != len(other_flux):
+            raise RuntimeError("The two solves have flux vectors of different sizes.")
+        num_compared_values = MPIAllReduce(len(flux) // 8)
+        num_different_values = MPIAllReduce(
+            sum(flux[i:i + 8] != other_flux[i:i + 8] for i in range(0, len(flux), 8))
+        )
 
     scalar_flux = problem.GetScalarFluxFieldFunction()[0]
     max_error = 0.0
@@ -289,6 +316,9 @@ if __name__ == "__main__":
     if rank == 0:
         print(f"RayTraceParallelMaxRelativeError={max_error:.8e}")
         print(f"RayTraceParallelFluxSum={flux_sum:.14e}")
+        if "compare_search" in globals():
+            print(f"RayTraceParallelComparedValues={num_compared_values}")
+            print(f"RayTraceParallelDifferentValues={num_different_values}")
         if scattering_order > 0:
             print(f"RayTraceParallelMaxP1ScaledError={max_p1_error:.8e}")
         sys.stdout.flush()
