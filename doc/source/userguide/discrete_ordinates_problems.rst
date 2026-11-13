@@ -695,7 +695,8 @@ another. The conservation correction, which couples each cell to the cells
 upwind of it, is done for all cells on rank 0 from a few numbers per face and
 group, and the output file is written by rank 0. The result does not depend on
 the partitioning. The other combinations of ``method`` and ``ray_tracer``
-require one rank.
+require one rank. ``conservation_correction=False`` leaves the correction out;
+see `Without the conservation correction`_.
 
 Conservation report
 -------------------
@@ -714,6 +715,36 @@ not: next to the source, in an optically thick cell, or in a cell cut by the
 shadow of a material edge, where the flux is discontinuous. The correction
 closes the balance of such a cell but does not recover the shape of the flux in
 it; refine the mesh there.
+
+Without the conservation correction
+-----------------------------------
+
+``conservation_correction=False``, which requires ``method="ray_trace"``, skips
+the correction: every cell keeps the flux projected from its ray-traced values,
+and the cells integrated exactly over direction keep their exact integrals. The
+flux is still the same, bit for bit, on any number of ranks and threads.
+
+What is lost is the balance. No cell balances what enters it, and the balance
+table of the solver, which then compares the source with the removal of the
+projected flux and the ray-traced leakage through the vacuum boundary, does not
+close: its residual is the quadrature error of the mesh, and the solver says
+that it is not expected to vanish. A collided problem that reads the file takes
+its first-collision source and the uncollided outflow from the uncorrected
+flux, so its own balance is off by the same amount.
+
+What is gained is that the flux of a cell depends on that cell alone. The
+correction passes the corrected leakage of a cell to the cells downwind of it
+as their inflow. A cell whose outgoing leakage is poor, such as a cell cut by
+the edge of a beam or by the shadow of a material edge, therefore changes the
+scale factors of the cells behind it, including cells whose projected flux was
+accurate. Without the correction that error stays in the cell where it arises.
+The pass over all cells on rank 0, with the gathering of their data and the
+return of the scale factors, also goes away.
+
+There is then no conservation report, and the diagnostics file holds neither
+scale factors nor balance residuals; its attribute ``conservation correction``
+is 0. With ``method="sweep"`` the switch is rejected, because the corrected
+leakage of the near-source cells is the inflow of the swept cells.
 
 ``diagnostics_file`` on :py:class:`pyopensn.solver.UncollidedSolver` names a
 second HDF5 file that holds the scale factor and the balance residual of every

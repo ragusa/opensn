@@ -118,7 +118,26 @@ if __name__ == "__main__":
     except Exception as error:
         hull_interface_source_rejected = "interface between two materials" in str(error)
 
+    # The bulk sweep takes the corrected leakage of the near-source cells as its inflow, so the
+    # conservation correction can be turned off only when every cell is ray traced.
+    uncorrected_sweep_rejected = False
+    try:
+        UncollidedProblem(
+            mesh=grid,
+            num_groups=1,
+            groupsets=[{"groups_from_to": [0, 0]}],
+            xs_map=[{"block_ids": [0], "xs": xs}],
+            point_sources=[PointSource(location=[0.25, -0.2, 0.3], strength=[1.0])],
+            near_source=[whole_domain],
+            conservation_correction=False,
+        )
+    except Exception as error:
+        uncorrected_sweep_rejected = (
+            'conservation_correction = false requires method = "ray_trace"' in str(error)
+        )
+
     if rank == 0:
+        print(f"UncollidedUncorrectedSweepRejected={int(uncorrected_sweep_rejected)}")
         print(f"UncollidedHullInterfaceSourceRejected={int(hull_interface_source_rejected)}")
         print(f"UncollidedMissingPointSourceRejected={int(missing_point_source_rejected)}")
         print(f"UncollidedNearSourceMismatchRejected={int(near_source_mismatch_rejected)}")
@@ -126,6 +145,10 @@ if __name__ == "__main__":
         print(f"UncollidedTwoDimensionalMeshRejected={int(two_dimensional_rejected)}")
         sys.stdout.flush()
 
+    if not uncorrected_sweep_rejected:
+        raise RuntimeError(
+            "Uncollided generation accepted conservation_correction=False with a bulk sweep."
+        )
     if not missing_point_source_rejected:
         raise RuntimeError("Uncollided generation accepted an input with no point source.")
     if not near_source_mismatch_rejected:

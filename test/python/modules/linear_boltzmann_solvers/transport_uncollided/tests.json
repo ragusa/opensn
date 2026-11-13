@@ -1,7 +1,7 @@
 [
   {
     "file": "uncollided_input_rejections.py",
-    "comment": "Uncollided generation rejects missing point sources, near-source mismatches, and boundary-aligned point sources, and a point source on a material interface with the material-hull ray tracer",
+    "comment": "Uncollided generation rejects missing point sources, near-source mismatches, and boundary-aligned point sources, and a point source on a material interface with the material-hull ray tracer, and conservation_correction=False with a bulk sweep",
     "num_procs": 1,
     "checks": [
       {
@@ -31,6 +31,12 @@
       {
         "type": "KeyValuePair",
         "key": "UncollidedHullInterfaceSourceRejected=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedUncorrectedSweepRejected=",
         "goldvalue": 1.0,
         "abs_tol": 0.0
       }
@@ -2136,6 +2142,389 @@
       {
         "type": "StrCompare",
         "key": "Material hull: search \"segment\"."
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 1 rank, hexahedra, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close",
+    "num_procs": 1,
+    "args": [
+      "mesh_type=\"hexahedra\"",
+      "conservation_correction=False"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np1_uncorrected",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0110712299,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209303828115,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": -1.937717e-06,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, hexahedra, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close; solved again with the correction: the corrected flux of a cell is the uncorrected one times one factor, to round-off, and the smallest and largest factors are the scale factors alpha that the corrected solve reports with seven digits",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"hexahedra\"",
+      "conservation_correction=False",
+      "compare_correction=True"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np2_uncorrected_compare",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0110712299,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209303828115,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": -1.937717e-06,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelLargestRatioSpreadInACell=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-13
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelSmallestCorrectionRatio=",
+        "goldvalue": 0.999955957,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Smallest scale factor alpha            =",
+        "goldvalue": 0.999955957,
+        "abs_tol": 6e-07
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelLargestCorrectionRatio=",
+        "goldvalue": 1.00002055,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest scale factor alpha             =",
+        "goldvalue": 1.00002055,
+        "abs_tol": 6e-07
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, hexahedra, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"hexahedra\"",
+      "conservation_correction=False"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_hexahedra_np4_uncorrected",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0110712299,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.475209303828115,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": -1.937717e-06,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, prisms, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close; solved again with the correction: the corrected flux of a cell is the uncorrected one times one factor, to round-off, and the smallest and largest factors are the scale factors alpha that the corrected solve reports with seven digits",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"prisms\"",
+      "conservation_correction=False",
+      "compare_correction=True"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_prisms_np2_uncorrected_compare",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.0179837113,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.456987368309532,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxP1ScaledError=",
+        "goldvalue": 0.0168444638,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 2.255137e-06,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelLargestRatioSpreadInACell=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-13
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelSmallestCorrectionRatio=",
+        "goldvalue": 0.999904699,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Smallest scale factor alpha            =",
+        "goldvalue": 0.999904699,
+        "abs_tol": 6e-07
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelLargestCorrectionRatio=",
+        "goldvalue": 1.0000864,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest scale factor alpha             =",
+        "goldvalue": 1.0000864,
+        "abs_tol": 6e-07
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 1 rank, tetrahedra, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close",
+    "num_procs": 1,
+    "args": [
+      "mesh_type=\"tetrahedra\"",
+      "conservation_correction=False"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_tetrahedra_np1_uncorrected",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.049406926,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 740.937298421285,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": -1.200962e-05,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 4 ranks, tetrahedra, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close; solved again with the correction: the corrected flux of a cell is the uncorrected one times one factor, to round-off, and the smallest and largest factors are the scale factors alpha that the corrected solve reports with seven digits",
+    "num_procs": 4,
+    "args": [
+      "mesh_type=\"tetrahedra\"",
+      "conservation_correction=False",
+      "compare_correction=True"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_tetrahedra_np4_uncorrected_compare",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.049406926,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 740.937298421285,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": -1.200962e-05,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelLargestRatioSpreadInACell=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-13
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelSmallestCorrectionRatio=",
+        "goldvalue": 0.999684724,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Smallest scale factor alpha            =",
+        "goldvalue": 0.999684724,
+        "abs_tol": 6e-07
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelLargestCorrectionRatio=",
+        "goldvalue": 1.00029294,
+        "abs_tol": 1e-08
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Largest scale factor alpha             =",
+        "goldvalue": 1.00029294,
+        "abs_tol": 6e-07
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      }
+    ]
+  },
+  {
+    "file": "uncollided_ray_trace_parallel.py",
+    "comment": "Every cell ray traced against the material hull on 2 ranks, reflecting, without the conservation correction (conservation_correction=False): analytic reference, with the tolerance of the corrected variants, since the error at the sample points is that of the projection and the correction changes the flux by less than 0.1% here; partition-independent flux; a reported balance that is the one of the uncorrected flux and does not close",
+    "num_procs": 2,
+    "args": [
+      "mesh_type=\"reflecting\"",
+      "conservation_correction=False"
+    ],
+    "outfileprefix": "uncollided_ray_trace_parallel_reflecting_np2_uncorrected",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelMaxRelativeError=",
+        "goldvalue": 0.012061738,
+        "abs_tol": 0.004
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "RayTraceParallelFluxSum=",
+        "goldvalue": 0.589982290569492,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": -6.594835e-06,
+        "rel_tol": 1e-05
+      },
+      {
+        "type": "StrCompare",
+        "key": "Conservation correction: off."
+      },
+      {
+        "type": "StrCompare",
+        "key": "is not expected to close"
       }
     ]
   },

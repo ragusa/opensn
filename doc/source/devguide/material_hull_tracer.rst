@@ -381,6 +381,31 @@ The default method keeps its own correction loop, because the corrected leakage
 of a near-source cell also feeds the sweep of the bulk cells next to it; it
 calls the same ``CorrectCellBalance``.
 
+With ``conservation_correction=False`` the second half is left out.
+``KeepRayTracedCells`` replaces ``CorrectRayTracedCells``: each rank stores the
+projected flux of its own cells as it is and adds the ray-traced leakage
+through the vacuum boundary faces of these cells to the outflow. Nothing is
+gathered on rank 0 and no scale factor is sent back. The ranks exchange four
+totals only: the fraction of the source emitted into the cells of the source,
+which gives the part emitted out of the domain, the two counts of the cells
+integrated exactly, and the number of cells. The flux of a cell is computed
+from that cell alone, so it does not depend on the partitioning or on the
+number of threads.
+
+What is lost is the balance of each cell and, with it, the global balance to
+round-off. ``FinalizeBalance`` then reports the source against the removal of
+the projected flux and the uncorrected leakage through the boundary, states
+that this balance is not expected to close, and does not treat a removal above
+the source as an error. What is gained is that the leakage error of a cell is
+no longer handed to the cells downwind of it as inflow, where it changes the
+scale factor of cells whose projected flux was accurate, and that the pass on
+rank 0 over all cells is gone. The switch requires ``method="ray_trace"``:
+with the default method the corrected leakage of the near-source cells is the
+inflow of the swept cells, and ``CheckConfigurationErrors`` rejects it. The
+diagnostics file then has no scale factors and no balance residuals. A
+residual of the uncorrected flux would need, for each cell, the leakage of the
+cells upwind of it, which on a partition boundary belong to another rank.
+
 Tests
 -----
 
@@ -413,3 +438,9 @@ numbers of paths, segments and crossings of a run with
 ``hull_tracer_backend="brute_force"``. The variants with ``compare_search``
 solve the problem a second time with ``"segment"`` and require every value of
 the flux of every rank to be equal, bit for bit, to that of the default search.
+The variants with ``conservation_correction=False`` check the uncorrected flux
+against the analytic references on one, two and four ranks and the balance
+that is reported for it; those with ``compare_correction`` also solve with the
+correction and require the ratio of the two fluxes to be the same at all nodes
+of a cell, to round-off, and its extremes to be the smallest and the largest
+scale factor of the corrected solve.

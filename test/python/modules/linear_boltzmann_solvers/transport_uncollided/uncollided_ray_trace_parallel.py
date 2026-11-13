@@ -41,6 +41,16 @@ second time with it, and the script prints how many values of the scalar flux, o
 were compared and how many differ by at least one bit from those of the first solve, which
 uses the default search unless hull_tracer_search is given. tests.json requires none to differ
 and checks, in the log of the solver, that the two solves used different searches.
+
+With the optional argument conservation_correction=False, the cells keep the flux projected
+from their ray-traced values, without the conservation correction. The analytic reference and
+the flux sum are checked as before; the balance the solver reports is that of the uncorrected
+flux and does not close. With compare_correction=True as well, the problem is solved a second
+time with the correction, and the script prints the smallest and the largest ratio of the
+corrected to the uncorrected flux over all nodes, and the largest relative spread of that ratio
+among the nodes of a cell. The correction scales the flux of a cell by one factor, so the
+spread is round-off and the two ratios are the smallest and the largest scale factor that the
+corrected solve reports.
 """
 
 import importlib
@@ -53,7 +63,10 @@ if "opensn_console" not in globals():
 
     size = MPI.COMM_WORLD.size
     rank = MPI.COMM_WORLD.rank
-    MPIAllReduce = MPI.COMM_WORLD.allreduce
+    _mpi_ops = {"sum": MPI.SUM, "max": MPI.MAX, "min": MPI.MIN}
+
+    def MPIAllReduce(value, op="sum"):
+        return MPI.COMM_WORLD.allreduce(value, op=_mpi_ops[op])
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../")))
     from pyopensn.aquad import GLCProductQuadrature3DXYZ
     from pyopensn.fieldfunc import FieldFunctionInterpolationPoint
@@ -252,6 +265,8 @@ if __name__ == "__main__":
         method="ray_trace",
         ray_tracer="material_hull",
     )
+    if "conservation_correction" in globals():
+        problem_options["conservation_correction"] = conservation_correction
     problem = UncollidedProblem(**problem_options, **tracer_options)
     solver = UncollidedSolver(problem=problem, file_name=file_name, **solver_options)
     solver.Initialize()
@@ -276,6 +291,35 @@ if __name__ == "__main__":
         num_different_values = MPIAllReduce(
             sum(flux[i:i + 8] != other_flux[i:i + 8] for i in range(0, len(flux), 8))
         )
+
+    smallest_ratio = math.inf
+    largest_ratio = 0.0
+    largest_spread = 0.0
+    if "compare_correction" in globals() and compare_correction:
+        # Solve again with the conservation correction turned the other way.
+        corrected_first = problem_options.get("conservation_correction", True)
+        other_file_name = file_name.replace(".h5", "_compare.h5")
+        other_options = dict(problem_options, conservation_correction=not corrected_first)
+        other_problem = UncollidedProblem(**other_options, **tracer_options)
+        other_solver = UncollidedSolver(problem=other_problem, file_name=other_file_name)
+        other_solver.Initialize()
+        other_solver.Execute()
+        if rank == 0 and os.path.exists(other_file_name):
+            os.remove(other_file_name)
+        corrected = list((problem if corrected_first else other_problem).GetPhiNewLocal())
+        uncorrected = list((other_problem if corrected_first else problem).GetPhiNewLocal())
+        # One group, and the nodes of a cell follow one another in the flux vector.
+        num_nodes = {"hexahedra": 8, "prisms": 6, "tetrahedra": 4, "reflecting": 8}[mesh_type]
+        for first in range(0, len(corrected), num_nodes):
+            ratios = [
+                corrected[i] / uncorrected[i] for i in range(first, first + num_nodes)
+            ]
+            smallest_ratio = min(smallest_ratio, min(ratios))
+            largest_ratio = max(largest_ratio, max(ratios))
+            largest_spread = max(largest_spread, (max(ratios) - min(ratios)) / max(ratios))
+        smallest_ratio = MPIAllReduce(smallest_ratio, "min")
+        largest_ratio = MPIAllReduce(largest_ratio, "max")
+        largest_spread = MPIAllReduce(largest_spread, "max")
 
     scalar_flux = problem.GetScalarFluxFieldFunction()[0]
     max_error = 0.0
@@ -319,6 +363,10 @@ if __name__ == "__main__":
         if "compare_search" in globals():
             print(f"RayTraceParallelComparedValues={num_compared_values}")
             print(f"RayTraceParallelDifferentValues={num_different_values}")
+        if "compare_correction" in globals() and compare_correction:
+            print(f"RayTraceParallelSmallestCorrectionRatio={smallest_ratio:.8e}")
+            print(f"RayTraceParallelLargestCorrectionRatio={largest_ratio:.8e}")
+            print(f"RayTraceParallelLargestRatioSpreadInACell={largest_spread:.3e}")
         if scattering_order > 0:
             print(f"RayTraceParallelMaxP1ScaledError={max_p1_error:.8e}")
         sys.stdout.flush()

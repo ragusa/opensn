@@ -167,6 +167,15 @@ UncollidedProblem::GetInputParameters()
   params.ConstrainParameterRange("method", AllowableRangeList::New({"sweep", "ray_trace"}));
 
   params.AddOptionalParameter(
+    "conservation_correction",
+    true,
+    "Scale the flux and the outgoing leakage of each ray-traced cell so that the cell balances "
+    "what enters it, from the source outward (Woodsford et al., 2026, Eqs. 24-25). When false, "
+    "which requires method = \"ray_trace\", each cell keeps the flux projected from its ray-"
+    "traced values: no balance is enforced, the reported balance does not close, and no cell is "
+    "affected by the leakage of the cells upwind of it.");
+
+  params.AddOptionalParameter(
     "hull_tracer_backend",
     "bvh",
     "Implementation of the material-hull ray tracer. \"bvh\" uses a bounding volume hierarchy. "
@@ -258,6 +267,12 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
                             " lies on a reflecting boundary, which is not supported for "
                             "uncollided generation.");
     }
+  // The bulk sweep takes the corrected leakage of the near-source cells as its inflow and
+  // balances every swept cell against it; it has no uncorrected counterpart.
+  if (not conservation_correction_ and not ray_trace_all_cells_)
+    errors.emplace_back("conservation_correction = false requires method = \"ray_trace\": with "
+                        "method = \"sweep\" the corrected leakage of the near-source cells is "
+                        "the inflow of the swept cells.");
   if (ray_trace_all_cells_)
   {
     // Every cell is ray traced, so no region is needed.
@@ -333,7 +348,8 @@ UncollidedProblem::UncollidedProblem(const InputParameters& params)
     hull_leaf_size_(params.GetParamValue<unsigned int>("hull_tracer_leaf_size")),
     hull_tracer_statistics_(params.GetParamValue<bool>("hull_tracer_statistics")),
     ell_max_(params.GetParamValue<size_t>("scattering_order")),
-    exact_near_source_leakage_(params.GetParamValue<bool>("exact_near_source_leakage"))
+    exact_near_source_leakage_(params.GetParamValue<bool>("exact_near_source_leakage")),
+    conservation_correction_(params.GetParamValue<bool>("conservation_correction"))
 {
   num_moments_ = 1;
 
@@ -2541,6 +2557,63 @@ UncollidedProblem::CorrectRayTracedCells(const SourcePoint& source_point,
 }
 
 void
+UncollidedProblem::KeepRayTracedCells(const SourcePoint& source_point,
+                                      const std::vector<RawNearSourceCell>& raw_cells,
+                                      double& source_angle_fraction,
+                                      size_t& exact_neighbor_count,
+                                      size_t& exact_neighbor_fallback_count,
+                                      size_t& num_cells)
+{
+  CALI_CXX_MARK_SCOPE("KeepRayTracedCells");
+
+  const auto& sdm = *discretization_;
+  const size_t num_local_cells = near_spls_.size();
+  // Each rank works on its own cells and nothing but the totals below leaves it.
+  std::uint64_t counts[3] = {0, 0, num_local_cells};
+  for (size_t n = 0; n < num_local_cells; ++n)
+  {
+    const size_t c = near_spls_[n];
+    const Cell& cell = grid_->GetLocalCell(c);
+    const auto& raw = raw_cells[n];
+
+    if (raw.is_exact_neighbor)
+      ++counts[raw.integrated_exactly ? 0 : 1];
+    if (raw.is_source_cell)
+    {
+      source_angle_fraction += SubtendedAngleFraction(cell, source_point.location);
+      if (not raw.integrated_exactly)
+        log.LogAllWarning() << GetName() << ": cell " << cell.global_id
+                            << " containing the point source at "
+                            << source_point.location.PrintStr()
+                            << " has a face that is not directly visible from the source. Its "
+                               "flux is projected from quadrature points, which is inaccurate "
+                               "near the source.";
+    }
+
+    // What leaves the domain is the ray-traced leakage through the boundary, as it is.
+    for (size_t f = 0; f < cell.faces.size(); ++f)
+      if (cell_face_orientations_[c][f] == FaceOrientation::OUTGOING and
+          not cell.faces[f].has_neighbor and not IsReflectingBoundary(cell.faces[f].neighbor_id))
+        for (size_t g = 0; g < num_groups_; ++g)
+          out_flow_ += raw.leakage[f][g];
+
+    for (size_t g = 0; g < num_groups_; ++g)
+      for (size_t i = 0; i < raw.phi[g].Rows(); ++i)
+        destination_phi_[sdm.MapDOFLocal(cell, i) * num_groups_ + g] = raw.phi[g](i);
+  }
+
+  if (opensn::mpi_comm.size() > 1)
+  {
+    opensn::mpi_comm.all_reduce(source_angle_fraction, mpi::op::sum<double>());
+    for (auto& count : counts)
+      opensn::mpi_comm.all_reduce(count, mpi::op::sum<std::uint64_t>());
+  }
+  exact_neighbor_count += counts[0];
+  exact_neighbor_fallback_count += counts[1];
+  num_cells = counts[2];
+}
+
+void
 UncollidedProblem::TraceNearSourceCell(RayTracer& ray_tracer,
                                        const SourcePoint& source_point,
                                        const size_t c,
@@ -2888,7 +2961,14 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
 
   // Number of cells ray traced, over all ranks.
   size_t num_traced_cells = num_near_cells;
-  if (ray_trace_all_cells_)
+  if (not conservation_correction_)
+    KeepRayTracedCells(source_point,
+                       raw_cells,
+                       source_angle_fraction,
+                       exact_neighbor_count,
+                       exact_neighbor_fallback_count,
+                       num_traced_cells);
+  else if (ray_trace_all_cells_)
     CorrectRayTracedCells(source_point,
                           raw_cells,
                           summary,
@@ -3055,24 +3135,30 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
     summary.original_outgoing_sum > 0.0
       ? summary.outgoing_change_sum / summary.original_outgoing_sum
       : 0.0;
-  log.Log() << std::setprecision(6) << std::scientific
-            << "Near-source consistency: " << summary.mismatched_cell_count << " / "
-            << num_traced_cells << " cells required a conservation correction greater than 1%"
-            << " (aggregate correction " << aggregate_relative_change << ").";
-  log.Log0Verbose1() << " Near-source conservation correction:\n"
-                     << "  Corrected cells             = " << summary.mismatched_cell_count << " / "
-                     << num_traced_cells << "\n"
-                     << "  Corrected cell-group pairs  = " << summary.mismatched_cell_group_count
-                     << " / " << near_source_pair_count << "\n"
-                     << std::setprecision(6) << std::scientific
-                     << "  Mismatched cell fraction     = " << mismatched_cell_fraction << "\n"
-                     << "  Aggregate relative mismatch  = " << aggregate_relative_change << "\n"
-                     << "  Maximum relative mismatch    = " << summary.max_relative_outgoing_change
-                     << "\n"
-                     << " NearSourceCurrentMismatchedCellFraction=" << mismatched_cell_fraction
-                     << "\n"
-                     << " NearSourceCurrentAggregateRelativeMismatch=" << aggregate_relative_change
-                     << "\n";
+  if (conservation_correction_)
+    log.Log() << std::setprecision(6) << std::scientific
+              << "Near-source consistency: " << summary.mismatched_cell_count << " / "
+              << num_traced_cells << " cells required a conservation correction greater than 1%"
+              << " (aggregate correction " << aggregate_relative_change << ").";
+  else
+    log.Log() << "Conservation correction: off. The " << num_traced_cells
+              << " ray-traced cells keep their projected flux; the balance of a cell is not "
+                 "enforced.";
+  if (conservation_correction_)
+    log.Log0Verbose1() << " Near-source conservation correction:\n"
+                       << "  Corrected cells             = " << summary.mismatched_cell_count
+                       << " / " << num_traced_cells << "\n"
+                       << "  Corrected cell-group pairs  = " << summary.mismatched_cell_group_count
+                       << " / " << near_source_pair_count << "\n"
+                       << std::setprecision(6) << std::scientific
+                       << "  Mismatched cell fraction     = " << mismatched_cell_fraction << "\n"
+                       << "  Aggregate relative mismatch  = " << aggregate_relative_change << "\n"
+                       << "  Maximum relative mismatch    = "
+                       << summary.max_relative_outgoing_change << "\n"
+                       << " NearSourceCurrentMismatchedCellFraction=" << mismatched_cell_fraction
+                       << "\n"
+                       << " NearSourceCurrentAggregateRelativeMismatch="
+                       << aggregate_relative_change << "\n";
 
   if (summary.num_cells > 0)
   {
@@ -3687,9 +3773,15 @@ UncollidedProblem::WriteDiagnostics(const std::string& file_name) const
       const H5FileHandle file_handle(raw_file);
       const auto file = file_handle.Id();
 
-      bool written = H5CreateAttribute<unsigned int>(file, "num groups", num_groups_) and
-                     H5CreateAttribute<uint64_t>(file, "num sources", source_diagnostics_.size());
-      for (size_t source = 0; source < source_diagnostics_.size() and written; ++source)
+      bool written =
+        H5CreateAttribute<unsigned int>(file, "num groups", num_groups_) and
+        H5CreateAttribute<uint64_t>(file, "num sources", source_diagnostics_.size()) and
+        H5CreateAttribute<unsigned int>(
+          file, "conservation correction", conservation_correction_ ? 1 : 0);
+      // Without the correction there are no scale factors, and no cell knows what enters it.
+      for (size_t source = 0;
+           source < source_diagnostics_.size() and written and conservation_correction_;
+           ++source)
       {
         const auto& diagnostics = source_diagnostics_[source];
         const std::string suffix = " " + std::to_string(source);
@@ -3969,9 +4061,10 @@ UncollidedProblem::FinalizeBalance(hid_t file)
     for (double* rate : {&production_, &physical_removal_, &reflected_removal_, &out_flow_})
       opensn::mpi_comm.all_reduce(*rate, mpi::op::sum<double>());
 
+  // Without the correction, the removal of the projected flux can exceed the source.
   const double correction_scale = std::max(1.0, production_);
   OpenSnLogicalErrorIf(
-    physical_removal_ > production_ + 1.0e-10 * correction_scale,
+    conservation_correction_ and physical_removal_ > production_ + 1.0e-10 * correction_scale,
     GetName() + ": physical uncollided removal (" + std::to_string(physical_removal_) +
       ") exceeds the physical source rate (" + std::to_string(production_) + ").");
 
@@ -3980,9 +4073,14 @@ UncollidedProblem::FinalizeBalance(hid_t file)
   const double conservation_error = (production_ == 0.0) ? 0.0 : (balance / production_);
 
   constexpr double balance_warning_tolerance = 1.0e-3;
-  if (std::abs(balance) > balance_warning_tolerance * correction_scale)
+  if (conservation_correction_ and std::abs(balance) > balance_warning_tolerance * correction_scale)
     log.Log0Warning() << GetName() << ": uncollided balance residual is " << std::setprecision(6)
                       << std::scientific << balance << ".";
+  if (not conservation_correction_)
+    log.Log() << "\nThe conservation correction is off: the balance of a cell is not enforced. "
+                 "The table below is the balance of the uncorrected flux, with the removal of "
+                 "the projected flux and the ray-traced leakage through the boundary, and is "
+                 "not expected to close.";
 
   log.Log() << "\nBalance table:\n"
             << std::setprecision(6) << std::scientific

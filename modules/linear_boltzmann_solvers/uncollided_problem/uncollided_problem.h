@@ -374,6 +374,20 @@ protected:
                              size_t& num_cells);
 
   /**
+   * Stores the flux of the ray-traced cells of this rank as it was projected, without the
+   * conservation correction, and adds the ray-traced leakage through the boundary to the
+   * outflow. Only totals are exchanged between the ranks: on return every rank holds the
+   * fraction of the source emitted into the cells, the numbers of exact neighbor cells and the
+   * number of cells, summed over the ranks. Collective.
+   */
+  void KeepRayTracedCells(const SourcePoint& source_point,
+                          const std::vector<RawNearSourceCell>& raw_cells,
+                          double& source_angle_fraction,
+                          size_t& exact_neighbor_count,
+                          size_t& exact_neighbor_fallback_count,
+                          size_t& num_cells);
+
+  /**
    * Ray traces one near-source cell: the leakage through its outgoing faces, its flux projected
    * on the finite element basis, and the upwind face terms of its bulk neighbors, all before
    * the conservation correction. It reads nothing that the tracing or the correction of another
@@ -669,6 +683,8 @@ protected:
   /// Integrate the leakages and volume integrals of the cells that share a vertex with a point
   /// source's cell exactly over direction instead of with spatial quadrature.
   bool exact_near_source_leakage_ = false;
+  /// False when the ray-traced cells keep their projected flux and no cell balance is enforced.
+  bool conservation_correction_ = true;
   std::vector<Moment> moments_;
   std::vector<std::string> moment_names_;
   std::vector<std::vector<double>> accumulated_moments_;

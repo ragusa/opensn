@@ -1030,6 +1030,18 @@ WrapLBS(py::module& slv)
         quadrature point of the mesh for every source, which
         ``ray_tracer='material_hull'`` keeps independent of the number of cells
         along each path.
+    conservation_correction : bool, default=True
+        Scale the flux and the outgoing leakage of each ray-traced cell by one
+        factor per group so that the cell balances what enters it, from the
+        source outward (Woodsford et al., 2026, Eqs. 24-25). ``False``
+        requires ``method='ray_trace'`` and keeps in every cell the flux
+        projected from its ray-traced values. The balance is then enforced in
+        no cell, and the balance table, made of the removal of the projected
+        flux and of the ray-traced leakage through the boundary, does not
+        close. In return the flux of a cell depends on that cell alone: a
+        cell with a poor outgoing leakage, for instance one cut by the edge of
+        a beam, no longer changes the cells downwind of it, and no pass over
+        all cells runs on rank 0.
     ray_tracer : {'cell_walk', 'material_hull'}, default='cell_walk'
         How the optical depth between a point and a source is computed.
         ``'cell_walk'`` follows the path from cell to cell, at a cost
@@ -2064,7 +2076,10 @@ WrapUncollidedSolver(py::module& slv)
         (``balance residual s``), both indexed ``[cell * num_groups + group]``
         in the order of the cell ids, and the relative balance residuals of the
         swept cells (``bulk cell ids s``, ``bulk balance residual s``). The
-        attributes ``num groups`` and ``num sources`` give the sizes. With
+        attributes ``num groups`` and ``num sources`` give the sizes, and
+        ``conservation correction`` is 1 or 0. With
+        ``conservation_correction=False`` on the problem there are no scale
+        factors, and the file holds none of these datasets. With
         ``hull_tracer_statistics`` on the problem, the attributes
         ``hull tracer paths``, ``hull tracer segments``,
         ``hull tracer box tests``, ``hull tracer triangle tests``,

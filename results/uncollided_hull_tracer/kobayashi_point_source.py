@@ -21,9 +21,10 @@ Arguments (set with --py name=value):
     mesh_dir    directory of the Kobayashi meshes
     lineout     False to skip the flux along the centerline of the duct (default True)
 
-and, passed to the problem when given, the options of the material-hull ray tracer:
+and, passed to the problem when given, the options of the material-hull ray tracer,
 hull_tracer_backend, hull_tracer_leaf_size, hull_tracer_search, hull_tracer_direction_bins and
-hull_tracer_statistics.
+hull_tracer_statistics, and conservation_correction (False with strategy "C" keeps the
+projected flux of every cell, without the conservation correction).
 
 Outputs: <prefix>.h5 (uncollided flux moments), <prefix>_diagnostics.h5 (scale factors and
 balance residuals of the cells) and <prefix>_lineout.csv (flux along the centerline of the duct).
@@ -57,7 +58,8 @@ if "mesh_dir" not in globals():
 if "lineout" not in globals():
     lineout = True
 TRACER_OPTIONS = ("hull_tracer_backend", "hull_tracer_leaf_size", "hull_tracer_search",
-                  "hull_tracer_direction_bins", "hull_tracer_statistics")
+                  "hull_tracer_direction_bins", "hull_tracer_statistics",
+                  "conservation_correction")
 
 MESH_FILES = {
     "coarse": "kobayashi_dog_leg.msh",
