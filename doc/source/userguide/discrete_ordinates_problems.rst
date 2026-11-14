@@ -854,11 +854,10 @@ rejected as unsupported. A source on a vacuum boundary may lie anywhere on it,
 including on an edge or a vertex shared by several cells, such as the corner of
 a symmetric model. It emits into each of its cells only the fraction of its
 strength in the solid angle that cell subtends; the rest leaves the domain
-directly and is counted as outflow. A source on a reflecting boundary is
-rejected, because it coincides with its own image; model the symmetry planes
-through such a source as vacuum boundaries, which is exact for the uncollided
-flux of a source on them. With ``ray_tracer="material_hull"`` the cells of a
-source must all have the same block id.
+directly and is counted as outflow. A source may also lie on reflecting
+boundaries; see :ref:`uncollided-source-on-reflecting-planes`. With
+``ray_tracer="material_hull"`` the cells of a source must all have the same
+block id.
 
 .. important::
 
@@ -912,7 +911,8 @@ image-source ray outside the physical domain back into the domain, then
 evaluates attenuation along the resulting physical path. Each image source is
 ray traced to every finite-element volume quadrature point and projected
 directly into the spatial discretization. With :math:`N` reflecting symmetry
-planes, each physical source point produces :math:`2^N-1` image contributions.
+planes, each physical source point inside the domain produces :math:`2^N-1`
+image contributions.
 
 This construction supports up to three planar, mutually orthogonal symmetry
 planes, such as ``xmin``, ``ymin``, and ``zmin``:
@@ -944,6 +944,47 @@ planes, such as ``xmin``, ``ymin``, and ``zmin``:
 
 The HDF5 file records the reflecting boundary IDs, and the collided problem
 rejects files generated with a different reflector set.
+
+.. _uncollided-source-on-reflecting-planes:
+
+Sources on reflecting planes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A point source may lie on reflecting planes, for example at the centre of a
+symmetric model reduced to an octant, at the corner of three reflecting planes.
+Such a plane is a plane of symmetry of the whole problem, and the image of the
+source across it coincides with the source. The strength given to the source is
+then that of the **whole** source: no image is made across a plane that
+contains the source, the uncollided flux in the domain is the point kernel of
+the whole strength, and a source on :math:`k` reflecting planes emits the
+fraction :math:`2^{-k}` of its strength into the domain. Images across the
+reflecting planes that do not contain the source are made as usual: a source on
+one of two reflecting planes has one image, and a source at the corner of three
+has none. The log reports the number of images made and skipped.
+
+The balance follows the rate emitted into the domain. The production rate is
+:math:`2^{-k}` times the strength, the file stores it as ``production``, and
+its attribute ``source strength`` holds the whole strength. Of the fraction
+:math:`2^{-k}`, what the source cells do not subtend leaves through vacuum
+boundaries that contain the source and is counted as outflow; at the corner of
+three reflecting planes nothing leaves that way. The collided problem, given the
+same reflecting boundaries, reads the production and the outflow from the file,
+so its balance closes and its production rate is the rate in the domain: with
+the octant of a source of strength :math:`S`, every entry of the balance is
+:math:`1/8` of that of the whole problem, and a result divided by the production
+rate is per neutron of the whole source.
+
+This convention is not continuous across the plane. A source of strength
+:math:`S` at a small distance from a reflecting plane emits :math:`S` into the
+domain, and its image adds an equal source on the other side; on the plane, the
+same input emits :math:`S/2` into the domain. The mesh places a source within
+:math:`10^{-6}` of a boundary face on that face, so a source closer than this to
+a reflecting plane, but not on it to round-off, is rejected. Place a source that
+is meant to be on the plane exactly on it.
+
+A plain discrete-ordinates point source, without the uncollided flux, puts all
+of its strength into the domain. The equivalent octant problem solved that way
+uses the source strength :math:`S/8`.
 
 Physical source points use the cell-wise near-source conservation correction
 of Woodsford, Ragusa, and Morel (2026) [#woodsford2026]_. A shared scale factor

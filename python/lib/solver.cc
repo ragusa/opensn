@@ -992,15 +992,23 @@ WrapLBS(py::module& slv)
         ``type`` entries as ``DiscreteOrdinatesProblem``. Reflecting boundaries
         are represented with directly projected image sources and must be
         planar, mutually orthogonal symmetry planes without an opposing
-        reflecting plane.
+        reflecting plane. No image is made across a reflecting plane that
+        contains a source.
     point_sources : List[pyopensn.source.PointSource], default=[]
         Explicit point sources. At least one point source is required. Inside
         the domain a source must belong to a single cell; sources exactly on
-        faces, edges, or vertices shared by more than one cell are rejected,
-        as are sources on a reflecting boundary. A source on a vacuum boundary
-        may be shared by several cells, for example at a corner of the domain.
-        It emits into each of its cells only the fraction of its strength in
-        the solid angle that the cell subtends; the rest is counted as outflow.
+        faces, edges, or vertices shared by more than one cell are rejected.
+        A source on the domain boundary may be shared by several cells, for
+        example at a corner of the domain. It emits into each of its cells only
+        the fraction of its strength in the solid angle that the cell subtends.
+        On a vacuum boundary the rest is counted as outflow. A source on
+        :math:`k` reflecting boundaries has the strength of the whole source,
+        whose image across those planes coincides with it: the uncollided flux
+        is that of the whole strength, and the fraction :math:`2^{-k}` of it
+        emitted into the domain is the production rate. At the corner of three
+        reflecting planes, give the strength of the whole source; the
+        production rate is one eighth of it. A source within :math:`10^{-6}` of
+        a reflecting boundary but not on it is rejected.
     near_source : List[pyopensn.logvol.LogicalVolume]
         Near-source ray-traced region for each point source, in the same order
         as ``point_sources``. With ``method='sweep'`` this list is required

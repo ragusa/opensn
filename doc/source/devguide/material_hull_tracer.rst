@@ -314,6 +314,12 @@ start of a piece is the material at the end of the piece before it. A folded
 path touches the reflecting boundaries without crossing them, so their triangles
 are excluded for image sources.
 
+A source on reflecting planes has no image across them
+(``SourcePoint::on_plane_mask``), so sources can have different numbers of
+images. Each image records the index of its physical source
+(``physical_source_index``), from which ``BuildMaterialHull`` takes its end
+material and its excluded triangles.
+
 The cell walk finds the face through which a path leaves a cell with a triangle
 test that has no rule for a path through an edge or a vertex of the mesh. It
 can then reject every triangle around the edge, or accept one that leads to a

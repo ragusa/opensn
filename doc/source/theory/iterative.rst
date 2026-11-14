@@ -1266,9 +1266,13 @@ Notes:
    cells, for example at a corner of the domain where several cells meet. Each
    of them receives :math:`S\,\Omega_c/(4\pi)`, and the faces between them,
    whose planes contain the source, carry no current. The remaining fraction
-   leaves the domain directly and is counted as outflow. Sources on a
-   reflecting boundary are rejected, because such a source coincides with its
-   own image.
+   leaves the domain directly and is counted as outflow. A source may also
+   lie on :math:`k` reflecting planes. Its image across such a plane coincides
+   with it, so none is made: the source has the strength :math:`S` of the whole
+   source, of which :math:`2^{-k} S` is emitted into the domain and is its
+   production rate. The fraction :math:`2^{-k} - \sum_c \Omega_c/(4\pi)`
+   leaves through vacuum boundaries that contain the source, and is zero at the
+   corner of three reflecting planes.
 
    When the source is close to an edge or vertex of its cell, it is also close
    to the cells that share that edge or vertex. Their quadrature leakages are
@@ -1328,7 +1332,8 @@ Notes:
    with one or more MPI ranks.
 
 #. Planar, mutually orthogonal reflecting symmetry boundaries are represented
-   by image sources. To compute attenuation from an image source, OpenSn
+   by image sources; no image is made across a plane that contains the source.
+   To compute attenuation from an image source, OpenSn
    reflects any portion of the ray outside the physical domain back into the
    domain, then performs the standard attenuation calculation along the
    resulting physical path. Each image copies the group-dependent strength of
