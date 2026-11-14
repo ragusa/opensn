@@ -63,7 +63,7 @@
   },
   {
     "file": "uncollided_reflecting_source_rejected.py",
-    "comment": "Reflecting uncollided generation rejects boundary-aligned point sources",
+    "comment": "Reflecting uncollided generation rejects sources on internal faces, edges and vertices and sources within 1e-6 of a reflecting boundary, and accepts a source on a reflecting boundary",
     "num_procs": 1,
     "checks": [
       {
@@ -74,7 +74,13 @@
       },
       {
         "type": "KeyValuePair",
-        "key": "UncollidedReflectingPlaneSourceRejected=",
+        "key": "UncollidedReflectingPlaneSourceAccepted=",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "UncollidedReflectingNearPlaneSourceRejected=",
         "goldvalue": 1.0,
         "abs_tol": 0.0
       }
@@ -3290,6 +3296,1171 @@
         "key": "UncollidedDelayedBalance=",
         "goldvalue": 0.0,
         "abs_tol": 1e-10
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, hexahedra, material_hull, ray_trace, 1 rank(s): flux bit for bit equal to that with vacuum planes, production 1/8, balance to round-off, no image",
+    "num_procs": 1,
+    "args": [
+      "case=\"corner\"",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_hexahedra_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.00948976922,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.347717267579393,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, hexahedra, material_hull, ray_trace, 2 rank(s): flux bit for bit equal to that with vacuum planes, production 1/8, balance to round-off, no image",
+    "num_procs": 2,
+    "args": [
+      "case=\"corner\"",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_hexahedra_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.00948976922,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.347717267579393,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, hexahedra, material_hull, ray_trace, 4 rank(s): flux bit for bit equal to that with vacuum planes, production 1/8, balance to round-off, no image",
+    "num_procs": 4,
+    "args": [
+      "case=\"corner\"",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_hexahedra_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.00948976922,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.347717267579393,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, tetrahedra shared by four cells, material_hull, ray_trace, 1 rank: flux bit for bit equal to that with vacuum planes, production 1/8, balance to round-off",
+    "num_procs": 1,
+    "args": [
+      "case=\"corner\"",
+      "mesh_type=\"tetrahedra\"",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_tetrahedra_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0100698335,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 143.559913244954,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 2940.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Point source 0 belongs to",
+        "goldvalue": 4.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, tetrahedra partitioned so that the four cells of the source are on 2 of 2 ranks, material_hull, ray_trace: flux bit for bit equal to that with vacuum planes and to that on 1 rank, production 1/8, balance to round-off",
+    "num_procs": 2,
+    "args": [
+      "case=\"corner\"",
+      "mesh_type=\"tetrahedra\"",
+      "split_source_cells=True",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_tetrahedra_split_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0100698335,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 143.559913244954,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 2940.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Point source 0 belongs to",
+        "goldvalue": 4.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "belongs to 4 cells on",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, tetrahedra partitioned so that the four cells of the source are on 3 of 4 ranks, material_hull, ray_trace: flux bit for bit equal to that with vacuum planes and to that on 1 rank, production 1/8, balance to round-off",
+    "num_procs": 4,
+    "args": [
+      "case=\"corner\"",
+      "mesh_type=\"tetrahedra\"",
+      "split_source_cells=True",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_tetrahedra_split_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0100698335,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 143.559913244954,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 2940.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Point source 0 belongs to",
+        "goldvalue": 4.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "belongs to 4 cells on",
+        "goldvalue": 3.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, hexahedra, cell_walk, sweep, 1 rank: flux bit for bit equal to that with vacuum planes, production 1/8, balance to round-off",
+    "num_procs": 1,
+    "args": [
+      "case=\"corner\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\"",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_hexahedra_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.00974359705,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.347879242707681,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, tetrahedra, cell_walk, sweep, 1 rank: flux bit for bit equal to that with vacuum planes, production 1/8, balance to round-off",
+    "num_procs": 1,
+    "args": [
+      "case=\"corner\"",
+      "mesh_type=\"tetrahedra\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\"",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_tetrahedra_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0313960487,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 142.314346422458,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 2940.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source at the corner of three reflecting planes, hexahedra, material_hull, ray_trace, conservation_correction=False: flux bit for bit equal to that with vacuum planes, production 1/8",
+    "num_procs": 1,
+    "args": [
+      "case=\"corner\"",
+      "conservation_correction=False",
+      "compare_vacuum=True"
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_corner_hexahedra_no_correction",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0094899248,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.347717275628298,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 7.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneComparedValues=",
+        "goldvalue": 4096.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneDifferentValues=",
+        "goldvalue": 0.0,
+        "abs_tol": 0.0
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on one of two reflecting planes, hexahedra, material_hull, ray_trace: point kernel of the source and of its one image (twice as large if the images across the plane of the source are traced), production 1/2",
+    "num_procs": 1,
+    "args": [
+      "case=\"one_plane\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_one_plane_hexahedra",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0106879306,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 1.21391720764339,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on one of two reflecting planes, tetrahedra, material_hull, ray_trace: point kernel of the source and of its one image, production 1/2",
+    "num_procs": 1,
+    "args": [
+      "case=\"one_plane\"",
+      "mesh_type=\"tetrahedra\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_one_plane_tetrahedra",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0140241457,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 783.159565176199,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on one of two reflecting planes, hexahedra, cell_walk, sweep: point kernel of the source and of its one image, production 1/2 (the swept leakage through the reflecting plane differs from the projected image by the discretization error)",
+    "num_procs": 1,
+    "args": [
+      "case=\"one_plane\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_one_plane_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0279182124,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 1.21121694294181,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on one of two reflecting planes at a vertex shared by four hexahedra, material_hull, ray_trace: point kernel of the source and of its one image, production 1/2",
+    "num_procs": 1,
+    "args": [
+      "case=\"vertex\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_vertex",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0104805867,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 1.06820286927218,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Point source 0 belongs to",
+        "goldvalue": 4.0,
+        "abs_tol": 0.0
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on one of two reflecting planes at a vertex shared by four hexahedra, cell_walk, sweep: the folded paths to the image end at the source vertex in a cell of the source, without being walked again; point kernel of the source and of its image",
+    "num_procs": 1,
+    "args": [
+      "case=\"vertex\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_vertex_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.010799997,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 1.0613202009783,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Cell-walk ray tracing:",
+        "goldvalue": 334.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on the edge of two of three reflecting planes, hexahedra, material_hull, ray_trace, 1 rank(s): point kernel of the source and of its one image, production 1/4",
+    "num_procs": 1,
+    "args": [
+      "case=\"edge\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_edge_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.01113311,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.599908478460044,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.25,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 6.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on the edge of two of three reflecting planes, hexahedra, material_hull, ray_trace, 2 rank(s): point kernel of the source and of its one image, production 1/4",
+    "num_procs": 2,
+    "args": [
+      "case=\"edge\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_edge_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.01113311,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.599908478460044,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.25,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 6.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "Source on the edge of two of three reflecting planes, hexahedra, cell_walk, sweep: point kernel of the source and of its one image, production 1/4",
+    "num_procs": 1,
+    "args": [
+      "case=\"edge\"",
+      "ray_tracer=\"cell_walk\"",
+      "method=\"sweep\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_edge_cell_walk_sweep",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.0142019684,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 0.597092677448187,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 0.25,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 1.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 6.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "A source on a reflecting plane and one inside, in two materials, hexahedra, material_hull, ray_trace, 1 rank(s): one image for the first, three for the second, each image traced from its own physical source, production 1/2 + 1",
+    "num_procs": 1,
+    "args": [
+      "case=\"two_sources\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_two_sources_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.00938367809,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 3.02949843545466,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 1.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 4.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane.py",
+    "comment": "A source on a reflecting plane and one inside, in two materials, hexahedra, material_hull, ray_trace, 4 rank(s): one image for the first, three for the second, each image traced from its own physical source, production 1/2 + 1",
+    "num_procs": 4,
+    "args": [
+      "case=\"two_sources\""
+    ],
+    "outfileprefix": "uncollided_source_on_reflecting_plane_two_sources_np4",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneMaxRelativeError=",
+        "goldvalue": 0.00938367809,
+        "abs_tol": 0.003
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "SourceOnReflectingPlaneFluxSum=",
+        "goldvalue": 3.02949843545466,
+        "rel_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Production rate             =",
+        "goldvalue": 1.5,
+        "abs_tol": 1e-12,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Conservation error          =",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-05,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Added ",
+        "goldvalue": 4.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "Skipped ",
+        "goldvalue": 2.0,
+        "abs_tol": 0.0,
+        "skip_lines_until": "Solve with reflecting planes"
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane_collided.py",
+    "comment": "Uncollided and collided flux with scattering, octant with the source at its corner on three reflecting planes against a quarter with the source on two, 1 rank(s): production 1/8 and 1/4, every integral of the quarter twice that of the octant, collided balances closed",
+    "num_procs": 1,
+    "outfileprefix": "uncollided_source_on_reflecting_plane_collided_np1",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "OctantProductionRate=",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "OctantBalance=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-10
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterBalance=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-10
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterOctantProductionDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterOctantUncollidedDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterOctantCollidedDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
+      }
+    ]
+  },
+  {
+    "file": "uncollided_source_on_reflecting_plane_collided.py",
+    "comment": "Uncollided and collided flux with scattering, octant with the source at its corner on three reflecting planes against a quarter with the source on two, 2 rank(s): production 1/8 and 1/4, every integral of the quarter twice that of the octant, collided balances closed",
+    "num_procs": 2,
+    "outfileprefix": "uncollided_source_on_reflecting_plane_collided_np2",
+    "checks": [
+      {
+        "type": "KeyValuePair",
+        "key": "OctantProductionRate=",
+        "goldvalue": 0.125,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "OctantBalance=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-10
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterBalance=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-10
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterOctantProductionDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterOctantUncollidedDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-12
+      },
+      {
+        "type": "KeyValuePair",
+        "key": "QuarterOctantCollidedDifference=",
+        "goldvalue": 0.0,
+        "abs_tol": 1e-09
       }
     ]
   }

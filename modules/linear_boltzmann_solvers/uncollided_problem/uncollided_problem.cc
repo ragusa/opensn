@@ -256,16 +256,27 @@ UncollidedProblem::CheckConfigurationErrors(std::vector<std::string>& errors) co
     errors.emplace_back("uncollided flux generation does not support adjoint mode.");
   // The near-source list is indexed one-to-one with the point-source list.
   const auto planes = ComputeReflectionPlanes(errors);
-  // A source on a reflecting plane coincides with its own image.
+  // A source on a reflecting plane coincides with its image across that plane: it has no image
+  // there and emits half of its strength into the domain. A source a little off the plane is
+  // located on the boundary face by the mesh, which would count the half emitted across the
+  // face as leakage, while its image would be traced as well: the result would jump by a factor
+  // of 2 across this band, so the band is rejected. Its width is the tolerance of
+  // Mesh::CheckPointInsideCellFace.
+  constexpr double point_in_face_tolerance = 1.0e-6;
   for (size_t i = 0; i < GetPointSources().size(); ++i)
     for (const auto& plane : planes)
     {
       const Vector3& location = GetPointSources()[i]->GetLocation();
-      const double tolerance = 1.0e-12 * std::max(1.0, std::abs(plane.offset));
-      if (std::abs(plane.normal.Dot(location) - plane.offset) <= tolerance)
-        errors.emplace_back("point source " + std::to_string(i) +
-                            " lies on a reflecting boundary, which is not supported for "
-                            "uncollided generation.");
+      const double distance = std::abs(PlaneDistance(plane, location));
+      if (not IsOnPlane(plane, location) and distance <= point_in_face_tolerance)
+      {
+        std::ostringstream message;
+        message << "point source " << i << " lies " << std::scientific << std::setprecision(3)
+                << distance << " from the reflecting boundary with id " << plane.boundary_id
+                << ": place it on the plane, or farther than " << point_in_face_tolerance
+                << " from it.";
+        errors.emplace_back(message.str());
+      }
     }
   // The bulk sweep takes the corrected leakage of the near-source cells as its inflow and
   // balances every swept cell against it; it has no uncorrected counterpart.
@@ -583,9 +594,40 @@ UncollidedProblem::BuildSourcePoints()
                              {}};
     for (const auto& subscriber : point_source->GetSubscribers())
       source_point.subscribers.push_back({subscriber.cell_local_id, subscriber.volume_weight});
+    source_point.physical_source_index = source_index;
+
+    // A source on the domain boundary can belong to several cells, on several ranks.
+    std::uint64_t num_source_cells = source_point.subscribers.size();
+    std::uint64_t num_source_ranks = num_source_cells > 0 ? 1 : 0;
+    if (opensn::mpi_comm.size() > 1)
+    {
+      opensn::mpi_comm.all_reduce(num_source_cells, mpi::op::sum<std::uint64_t>());
+      opensn::mpi_comm.all_reduce(num_source_ranks, mpi::op::sum<std::uint64_t>());
+    }
+    if (num_source_cells > 1)
+      log.Log() << "Point source " << source_index << " belongs to " << num_source_cells
+                << " cells on " << num_source_ranks << " ranks.";
+
+    // The reflecting planes through the source.
+    unsigned int num_source_planes = 0;
+    for (size_t p = 0; p < reflection_planes_.size(); ++p)
+      if (IsOnPlane(reflection_planes_[p], source_point.location))
+      {
+        source_point.on_plane_mask |= std::uint32_t{1} << p;
+        source_point.domain_fraction *= 0.5;
+        ++num_source_planes;
+      }
+    if (num_source_planes > 0)
+      log.Log() << "Point source " << source_index << " at " << source_point.location.PrintStr()
+                << " lies on " << num_source_planes
+                << " reflecting boundaries: its strength is that of the whole source, of which "
+                << "a fraction " << source_point.domain_fraction
+                << " is emitted into the domain; the uncollided flux in the domain is that of "
+                   "the whole source.";
     source_points_.push_back(std::move(source_point));
 
-    // A source near a cell face can be poorly resolved by spatial quadrature.
+    // A source near a cell face can be poorly resolved by spatial quadrature. A boundary face
+    // that contains the source is where the source is meant to be.
     const auto& subscribers = source_points_.back().subscribers;
     if (subscribers.size() == 1)
     {
@@ -596,7 +638,12 @@ UncollidedProblem::BuildSourcePoints()
       double centroid_clearance = std::numeric_limits<double>::max();
       for (const auto& face : source_cell.faces)
       {
-        min_face_dist = std::min(min_face_dist, std::abs(face.normal.Dot(loc - face.centroid)));
+        const double face_dist = std::abs(face.normal.Dot(loc - face.centroid));
+        const double face_tolerance =
+          1.0e-12 * std::max(1.0, std::abs(face.normal.Dot(face.centroid)));
+        if (not face.has_neighbor and face_dist <= face_tolerance)
+          continue;
+        min_face_dist = std::min(min_face_dist, face_dist);
         centroid_clearance = std::min(
           centroid_clearance, std::abs(face.normal.Dot(source_cell.centroid - face.centroid)));
       }
@@ -626,11 +673,19 @@ UncollidedProblem::AddReflectedSourcePoints()
   const size_t num_image_combinations = (size_t{1} << reflection_planes_.size()) - 1;
   reflected_source_points_.reserve(physical_source_count * num_image_combinations);
 
+  size_t num_skipped_images = 0;
   for (size_t source_index = 0; source_index < physical_source_count; ++source_index)
   {
     const auto& physical_source = source_points_[source_index];
     for (size_t mask = 1; mask <= num_image_combinations; ++mask)
     {
+      // An image across a plane that contains the source coincides with an image already made,
+      // or with the source: the whole strength of the source already accounts for it.
+      if ((mask & physical_source.on_plane_mask) != 0)
+      {
+        ++num_skipped_images;
+        continue;
+      }
       auto image_location = physical_source.location;
       std::vector<ReflectionPlane> image_planes;
       for (size_t p = 0; p < reflection_planes_.size(); ++p)
@@ -641,14 +696,25 @@ UncollidedProblem::AddReflectedSourcePoints()
           image_planes.push_back(plane);
         }
 
-      reflected_source_points_.push_back(SourcePoint{
-        image_location, physical_source.strength, {}, nullptr, std::move(image_planes)});
+      // The folded path of an image ends at its physical source, so the image shares its cells.
+      SourcePoint image{image_location,
+                        physical_source.strength,
+                        physical_source.subscribers,
+                        nullptr,
+                        std::move(image_planes)};
+      image.on_plane_mask = physical_source.on_plane_mask;
+      image.domain_fraction = physical_source.domain_fraction;
+      image.physical_source_index = source_index;
+      reflected_source_points_.push_back(std::move(image));
     }
   }
 
   log.Log() << "Added " << reflected_source_points_.size() << " reflected image sources for "
             << physical_source_count << " physical sources "
             << "and " << reflection_planes_.size() << " symmetry planes.";
+  if (num_skipped_images > 0)
+    log.Log() << "Skipped " << num_skipped_images
+              << " image sources across reflecting planes that contain their source.";
 }
 
 UncollidedProblem::~UncollidedProblem() = default;
@@ -859,6 +925,7 @@ UncollidedProblem::Execute(const std::string& file_name,
 
   std::fill(phi_new_local_.begin(), phi_new_local_.end(), 0.0);
   production_ = 0.0;
+  source_strength_ = 0.0;
   physical_removal_ = 0.0;
   reflected_removal_ = 0.0;
   out_flow_ = 0.0;
@@ -1601,24 +1668,18 @@ UncollidedProblem::BuildMaterialHull()
     source_point.hull_material = lowest_material;
   }
 
-  // The folded path of an image source ends at its physical source. The images of a physical
-  // source follow one another in reflected_source_points_.
-  if (not source_points_.empty())
+  // The folded path of an image source ends at its physical source. A source on a reflecting
+  // plane has fewer images than the others.
+  for (auto& image_source : reflected_source_points_)
   {
-    const size_t num_images_per_source = reflected_source_points_.size() / source_points_.size();
-    for (size_t s = 0; s < source_points_.size(); ++s)
-      for (size_t k = 0; k < num_images_per_source; ++k)
-      {
-        const auto& physical_source = source_points_[s];
-        auto& image_source = reflected_source_points_[s * num_images_per_source + k];
-        image_source.hull_material = physical_source.hull_material;
-        image_source.hull_excluded_triangles.clear();
-        std::set_union(physical_source.hull_excluded_triangles.begin(),
-                       physical_source.hull_excluded_triangles.end(),
-                       reflecting_triangles.begin(),
-                       reflecting_triangles.end(),
-                       std::back_inserter(image_source.hull_excluded_triangles));
-      }
+    const auto& physical_source = source_points_.at(image_source.physical_source_index);
+    image_source.hull_material = physical_source.hull_material;
+    image_source.hull_excluded_triangles.clear();
+    std::set_union(physical_source.hull_excluded_triangles.begin(),
+                   physical_source.hull_excluded_triangles.end(),
+                   reflecting_triangles.begin(),
+                   reflecting_triangles.end(),
+                   std::back_inserter(image_source.hull_excluded_triangles));
   }
 
   hull_retraced_segments_ = 0;
@@ -3109,12 +3170,21 @@ UncollidedProblem::RaytraceNearSourceRegion(const SourcePoint& source_point)
   }
 
   // A source on the domain boundary emits part of its strength directly out of the domain.
-  // Reflecting setups reject sources on faces, so this part always leaves through a
-  // non-reflecting boundary.
+  // Of the whole source, the fraction domain_fraction is emitted on the domain side of the
+  // reflecting planes through the source; what of it is not emitted into the source cells
+  // leaves through vacuum boundaries that contain the source.
   timings_.conservation += phase_timer.GetTime() / 1000.0;
 
-  // Rank 0 holds the fraction emitted into the cells of all ranks.
-  const double escaped_fraction = std::max(0.0, 1.0 - source_angle_fraction);
+  // Rank 0 holds the fraction emitted into the cells of all ranks; every rank checks it.
+  if (opensn::mpi_comm.size() > 1)
+    opensn::mpi_comm.broadcast(source_angle_fraction, 0);
+  OpenSnLogicalErrorIf(
+    source_angle_fraction > source_point.domain_fraction + 1.0e-9,
+    GetName() + ": the source cells subtend a fraction " + std::to_string(source_angle_fraction) +
+      " of the directions, more than the fraction " + std::to_string(source_point.domain_fraction) +
+      " on the domain side of the reflecting planes through the source.");
+  const double escaped_fraction =
+    std::max(0.0, source_point.domain_fraction - source_angle_fraction);
   if (opensn::mpi_comm.rank() == 0)
     for (size_t g = 0; g < num_groups_; ++g)
       out_flow_ += strength[g] * escaped_fraction;
@@ -3906,10 +3976,14 @@ UncollidedProblem::UpdateBalance(const SourcePoint& source_point)
   const Vector3& pt_loc = source_point.location;
   const std::vector<double>& strength = source_point.strength;
 
-  // Each rank holds its share of the balance; the source is counted once.
+  // Each rank holds its share of the balance; the source is counted once. A source on
+  // reflecting planes emits only its domain fraction into the domain.
   if (opensn::mpi_comm.rank() == 0)
     for (size_t g = 0; g < num_groups_; ++g)
-      production_ += strength[g];
+    {
+      production_ += strength[g] * source_point.domain_fraction;
+      source_strength_ += strength[g];
+    }
 
   for (const auto& cell : grid_->GetLocalCells())
   {
@@ -4058,7 +4132,8 @@ UncollidedProblem::FinalizeBalance(hid_t file)
 
   // Every rank holds its share of the removal and of the outflow.
   if (opensn::mpi_comm.size() > 1)
-    for (double* rate : {&production_, &physical_removal_, &reflected_removal_, &out_flow_})
+    for (double* rate :
+         {&production_, &source_strength_, &physical_removal_, &reflected_removal_, &out_flow_})
       opensn::mpi_comm.all_reduce(*rate, mpi::op::sum<double>());
 
   // Without the correction, the removal of the projected flux can exceed the source.
@@ -4082,6 +4157,10 @@ UncollidedProblem::FinalizeBalance(hid_t file)
                  "the projected flux and the ray-traced leakage through the boundary, and is "
                  "not expected to close.";
 
+  if (source_strength_ != production_)
+    log.Log() << "\nPoint sources lie on reflecting boundaries: the whole sources have strength "
+              << std::setprecision(6) << std::scientific << source_strength_
+              << ", of which the production rate below is emitted into the domain.";
   log.Log() << "\nBalance table:\n"
             << std::setprecision(6) << std::scientific
             << " Removal rate                = " << total_removal << "\n"
@@ -4100,6 +4179,8 @@ UncollidedProblem::FinalizeBalance(hid_t file)
                            GetName() + ": failed to write uncollided removal rate.");
       OpenSnLogicalErrorIf(not H5CreateAttribute<double>(file, "out-flow", out_flow_),
                            GetName() + ": failed to write uncollided outflow rate.");
+      OpenSnLogicalErrorIf(not H5CreateAttribute<double>(file, "source strength", source_strength_),
+                           GetName() + ": failed to write uncollided source strength.");
     });
 }
 

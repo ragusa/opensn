@@ -16,8 +16,10 @@
 #include "framework/data_types/vector.h"
 #include "framework/data_types/vector3.h"
 #include "hdf5.h"
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -91,6 +93,14 @@ protected:
     /// source and on the reflecting boundaries.
     std::uint32_t hull_material = 0;
     std::vector<std::uint32_t> hull_excluded_triangles;
+    /// Bit p is set when reflection_planes_[p] contains the physical source. Such a plane has no
+    /// image across it: the image coincides with the source, whose strength is that of the whole
+    /// source, and the source emits domain_fraction = 2^-k of it into the domain, with k the
+    /// number of bits set. Images keep the values of their physical source.
+    std::uint32_t on_plane_mask = 0;
+    double domain_fraction = 1.0;
+    /// Index in source_points_ of the physical source (its own index for a physical source).
+    size_t physical_source_index = 0;
   };
 
   /// How the optical depth between a point and a source is computed.
@@ -145,6 +155,17 @@ protected:
   /// Returns the planes of the reflecting boundaries and appends an error for each invalid
   /// boundary condition.
   std::vector<ReflectionPlane> ComputeReflectionPlanes(std::vector<std::string>& errors) const;
+
+  /// Signed distance from @p point to @p plane, and whether the point lies on the plane, to the
+  /// tolerance used for every on-plane decision about a point source.
+  static double PlaneDistance(const ReflectionPlane& plane, const Vector3& point)
+  {
+    return plane.normal.Dot(point) - plane.offset;
+  }
+  static bool IsOnPlane(const ReflectionPlane& plane, const Vector3& point)
+  {
+    return std::abs(PlaneDistance(plane, point)) <= 1.0e-12 * std::max(1.0, std::abs(plane.offset));
+  }
 
   /// Stores the reflection planes once the configuration has been validated.
   void BuildRuntimeData() override;
@@ -689,7 +710,10 @@ protected:
   std::vector<std::string> moment_names_;
   std::vector<std::vector<double>> accumulated_moments_;
 
+  /// Rate emitted into the domain, and strength of the whole physical sources: they differ when
+  /// a source lies on reflecting planes.
   double production_ = 0.;
+  double source_strength_ = 0.;
   double physical_removal_ = 0.;
   double reflected_removal_ = 0.;
   double out_flow_ = 0.;
